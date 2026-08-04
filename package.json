@@ -8,10 +8,11 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
+    "validate:schema": "node scripts/validate-seo.mjs",
     "db:up": "docker compose up -d mysql",
     "db:down": "docker compose stop mysql",
-    "db:migrate": "node scripts/db-migrate.ts",
-    "db:seed": "node scripts/db-seed.ts"
+    "db:migrate": "node scripts/db-migrate.mts",
+    "db:seed": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/db-seed.mts"
   },
   "dependencies": {
     "@reduxjs/toolkit": "^2.12.0",

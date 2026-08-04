@@ -13,7 +13,7 @@ import { PinIcon } from "@/components/icons";
 export const metadata: Metadata = {
   title: "Ekmool — GI-Tagged Single-Origin Indian Foods",
   description:
-    "Turmeric, makhana and chilli sourced from the one district that earned each GI tag. Kandhamal, Lakadong, Mithila, Guntur, Byadagi — traced, milled fresh, shipped across India.",
+    "Turmeric, makhana and chilli from the one district that earned each GI tag — Kandhamal, Lakadong, Mithila, Guntur, Byadagi. Milled fresh, shipped across India.",
   alternates: { canonical: "/" },
 };
 

@@ -1,0 +1,27 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: ekmool-mysql
+    restart: unless-stopped
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ekmool_root_dev
+      MYSQL_DATABASE: ekmool
+      MYSQL_USER: ekmool
+      MYSQL_PASSWORD: ekmool_dev
+    command:
+      - mysqld
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+    volumes:
+      - ekmool-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-pekmool_root_dev"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 20s
+
+volumes:
+  ekmool-mysql-data:

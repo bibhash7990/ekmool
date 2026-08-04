@@ -35,7 +35,8 @@ export function PhotoPlaceholder({
     >
       <div className="absolute inset-x-0 top-0 p-5">
         <div className="h-px w-16 bg-ek-green-900/20" />
-        <figcaption className="mt-3 max-w-[34ch] text-15 text-ek-green-700/70 italic">
+        {/* Full-opacity green-700: at 70% it drops below 4.5:1 on gold-100. */}
+        <figcaption className="mt-3 max-w-[34ch] text-15 text-ek-green-700 italic">
           {direction}
         </figcaption>
       </div>

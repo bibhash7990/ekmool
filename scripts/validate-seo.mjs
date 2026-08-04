@@ -64,6 +64,8 @@ function firstMatch(html, regex) {
 
 const failures = [];
 const warnings = [];
+/** internal href -> set of pages that link to it */
+const internalLinks = new Map();
 
 function fail(page, message) {
   failures.push(`${page}: ${message}`);
@@ -151,6 +153,14 @@ async function checkPage({ path, types }) {
   if (imagesWithoutAlt > 0)
     fail(path, `${imagesWithoutAlt} <img> without alt`);
 
+  // --- collect internal links for the crawl below ---
+  for (const [, href] of html.matchAll(/<a[^>]+href="(\/[^"#?]*)"/g)) {
+    const clean = decode(href).replace(/\/$/, "") || "/";
+    if (clean.startsWith("/_next")) continue;
+    if (!internalLinks.has(clean)) internalLinks.set(clean, new Set());
+    internalLinks.get(clean).add(path);
+  }
+
   const label = `${path}`.padEnd(42);
   console.log(
     `  ok  ${label} title ${String(title?.length ?? 0).padStart(2)}  desc ${String(
@@ -207,6 +217,27 @@ for (const path of NOINDEX_PAGES) {
   }
 }
 await checkRobotsAndSitemap();
+
+/** Every internal link found on any checked page must resolve. */
+async function checkInternalLinks() {
+  const targets = [...internalLinks.keys()].sort();
+  let broken = 0;
+  for (const target of targets) {
+    const response = await fetch(`${base}${target}`, { redirect: "manual" });
+    if (response.status >= 400) {
+      broken += 1;
+      fail(
+        target,
+        `broken link (HTTP ${response.status}), linked from: ${[...internalLinks.get(target)].join(", ")}`,
+      );
+    }
+  }
+  console.log(
+    `  ok  internal links (${targets.length} unique targets, ${broken} broken)`,
+  );
+}
+
+await checkInternalLinks();
 
 if (warnings.length) {
   console.log(`\n${warnings.length} warning(s):`);

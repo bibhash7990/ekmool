@@ -1,9 +1,11 @@
 import type { NextConfig } from "next";
+import createMDX from "@next/mdx";
 
 const nextConfig: NextConfig = {
   output: "standalone",
   // Required by the PostHog reverse proxy (API paths must keep their shape).
   skipTrailingSlashRedirect: true,
+  pageExtensions: ["ts", "tsx", "mdx"],
   images: {
     formats: ["image/avif", "image/webp"],
   },
@@ -22,4 +24,13 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+const withMDX = createMDX({
+  options: {
+    // Turbopack cannot serialise plugin functions across the Rust
+    // boundary — plugins must be named as strings.
+    remarkPlugins: [["remark-gfm"]],
+    rehypePlugins: [],
+  },
+});
+
+export default withMDX(nextConfig);

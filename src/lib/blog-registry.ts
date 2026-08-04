@@ -24,7 +24,7 @@ export const BLOG_POSTS: BlogPost[] = [
     title: "Lakadong vs Kandhamal Turmeric: Which Should You Buy?",
     titleTag: "Lakadong vs Kandhamal Turmeric: Which to Buy",
     description:
-      "Lakadong vs Kandhamal turmeric compared on curcumin, flavour, colour, price and best use. A practical guide to choosing between India's two best-known GI turmerics.",
+      "Lakadong vs Kandhamal turmeric compared on curcumin, flavour, colour, price and best use — a practical guide to choosing India's two best-known GI turmerics.",
     publishedAt: "2026-07-14",
     readingMinutes: 8,
     excerpt:

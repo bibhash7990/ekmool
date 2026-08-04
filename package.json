@@ -1,4 +1,4 @@
-{
+﻿{
   "name": "ekmool",
   "version": "0.1.0",
   "private": true,
@@ -11,12 +11,15 @@
     "validate:schema": "node scripts/validate-seo.mjs",
     "test:checkout": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/test-checkout.mjs",
     "test:db-down": "node scripts/test-db-down.mjs",
+    "test:jobs": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/test-jobs.mjs",
+    "cron": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/cron-runner.mts",
     "db:up": "docker compose up -d mysql",
     "db:down": "docker compose stop mysql",
     "db:migrate": "node scripts/db-migrate.mts",
     "db:seed": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/db-seed.mts"
   },
   "dependencies": {
+    "@clerk/nextjs": "^7.6.4",
     "@mdx-js/loader": "^3.1.1",
     "@mdx-js/react": "^3.1.1",
     "@next/mdx": "^16.3.0",
@@ -37,11 +40,13 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/node-cron": "^3.0.11",
     "@types/nodemailer": "^8.0.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.3.0",
+    "node-cron": "^4.6.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

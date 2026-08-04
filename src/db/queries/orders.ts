@@ -8,15 +8,8 @@ import {
   FREE_SHIPPING_THRESHOLD_PAISE,
 } from "@/lib/constants";
 
-export type OrderStatus =
-  | "pending"
-  | "confirmed"
-  | "packed"
-  | "shipped"
-  | "delivered"
-  | "cancelled";
-
-export type PaymentStatus = "pending" | "paid" | "failed" | "refunded";
+export type { OrderStatus, PaymentStatus } from "@/lib/order-status";
+import type { OrderStatus, PaymentStatus } from "@/lib/order-status";
 
 export interface OrderItem {
   sku: string;

@@ -1,0 +1,200 @@
+@import "tailwindcss";
+
+/*
+  EKMOOL design tokens — single source of truth.
+  Never hardcode brand hex in components; use the utilities these generate
+  (bg-ek-paper, text-ek-green-900, border-ek-green-200, …).
+*/
+@theme {
+  /* ---- Brand palette (Section 2.2) ---- */
+  --color-ek-green-950: #10241b; /* deepest — dark section backgrounds */
+  --color-ek-green-900: #1c3a2d; /* PRIMARY INK — headings, header/footer, buttons */
+  --color-ek-green-700: #2c523f; /* hover states, secondary text on light */
+  --color-ek-green-200: #c9d8cd; /* borders, dividers on light */
+  --color-ek-gold-600: #c4881f; /* gold hover/active + accessible gold text on paper */
+  --color-ek-gold-500: #d99a2b; /* TURMERIC GOLD — CTAs, accents, the root motif */
+  --color-ek-gold-100: #f7e8cb; /* gold tint backgrounds, badges */
+  --color-ek-cream: #f5efe2; /* ink on dark backgrounds */
+  --color-ek-paper: #faf7f0; /* page background — never pure white */
+  --color-ek-terracotta: #b4572e; /* chilli product accent only */
+
+  /* ---- Typography ---- */
+  --font-display: var(--font-marcellus), Georgia, "Times New Roman", serif;
+  --font-sans: var(--font-figtree), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", sans-serif;
+
+  /* Deliberate type scale: 15 / 17 / 20 / 26 / 34 / 46 / 64 */
+  --text-15: 0.9375rem;
+  --text-15--line-height: 1.55;
+  --text-17: 1.0625rem;
+  --text-17--line-height: 1.6;
+  --text-20: 1.25rem;
+  --text-20--line-height: 1.5;
+  --text-26: 1.625rem;
+  --text-26--line-height: 1.35;
+  --text-34: 2.125rem;
+  --text-34--line-height: 1.22;
+  --text-46: 2.875rem;
+  --text-46--line-height: 1.12;
+  --text-64: 4rem;
+  --text-64--line-height: 1.05;
+
+  /* ---- Shadows: nothing heavier than these two (Section 5) ---- */
+  --shadow-hairline: 0 1px 2px rgb(16 36 27 / 0.06);
+  --shadow-card: 0 1px 2px rgb(16 36 27 / 0.05), 0 8px 24px rgb(16 36 27 / 0.07);
+
+  /* ---- Motion ---- */
+  --ease-soft: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--color-ek-paper);
+    color: var(--color-ek-green-900);
+    font-family: var(--font-sans);
+    font-size: var(--text-17);
+    line-height: var(--text-17--line-height);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection {
+    background-color: var(--color-ek-gold-100);
+    color: var(--color-ek-green-950);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-ek-green-900);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
+}
+
+/* Letterspaced-caps label — matches the wordmark tagline style */
+@utility eyebrow {
+  font-family: var(--font-display);
+  font-size: var(--text-15);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  line-height: 1.4;
+}
+
+/* Link underline that draws in from the left on hover/focus */
+@utility link-draw {
+  background-image: linear-gradient(currentColor, currentColor);
+  background-size: 0% 1px;
+  background-repeat: no-repeat;
+  background-position: 0 100%;
+  padding-bottom: 2px;
+  transition: background-size 0.3s var(--ease-soft);
+
+  &:hover,
+  &:focus-visible {
+    background-size: 100% 1px;
+  }
+}
+
+/* Card lift micro-interaction (2px, per Section 5) */
+@utility card-lift {
+  transition:
+    transform 0.25s var(--ease-soft),
+    box-shadow 0.25s var(--ease-soft);
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-card);
+  }
+}
+
+/* Very subtle grain — dark sections only (Section 5: texture) */
+@utility grain-dark {
+  position: relative;
+
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.05;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+}
+
+/* ---- The one scroll-reveal pattern (fade + 8px rise) ---- */
+.reveal {
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    opacity 0.5s var(--ease-soft),
+    transform 0.5s var(--ease-soft);
+  will-change: opacity, transform;
+}
+
+.reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+/* ---- Taproot draw-in (~700ms, the single orchestrated load moment) ---- */
+@keyframes ek-root-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes ek-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.taproot-root {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: ek-root-draw 0.7s var(--ease-soft) 0.15s forwards;
+}
+
+.taproot-hair {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: ek-root-draw 0.3s var(--ease-soft) 0.65s forwards;
+}
+
+.taproot-crown {
+  opacity: 0;
+  animation: ek-fade-in 0.4s var(--ease-soft) 0.05s forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  .taproot-root,
+  .taproot-hair {
+    stroke-dasharray: none;
+    stroke-dashoffset: 0;
+    animation: none;
+  }
+
+  .taproot-crown {
+    opacity: 1;
+    animation: none;
+  }
+}

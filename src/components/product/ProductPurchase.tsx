@@ -187,7 +187,7 @@ export function ProductPurchase({
           {added && (
             <p className="text-ek-green-700">
               Added to cart.{" "}
-              <Link href="/cart" className="link-draw text-ek-gold-600">
+              <Link href="/cart" className="link-draw text-ek-gold-800">
                 View cart
               </Link>
             </p>

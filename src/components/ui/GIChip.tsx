@@ -12,7 +12,7 @@ export function GIChip({
     <span
       className={`inline-flex items-center gap-1.5 rounded-sm bg-ek-gold-100 px-2.5 py-1 text-15 leading-none text-ek-green-900 ${className}`.trim()}
     >
-      <SealIcon className="size-3.5 shrink-0 text-ek-gold-600" />
+      <SealIcon className="size-3.5 shrink-0 text-ek-gold-800" />
       <span className="font-medium">{label}</span>
     </span>
   );

@@ -37,7 +37,7 @@ export function ProductCard({
             giTagName={product.giTagName}
           />
           {/* h2: cards sit directly under the page h1 on /products */}
-          <h2 className="mt-4 font-display text-26 text-ek-green-900 transition-colors group-hover:text-ek-gold-600">
+          <h2 className="mt-4 font-display text-26 text-ek-green-900 transition-colors group-hover:text-ek-gold-800">
             {product.name}
           </h2>
           <p className="mt-2.5 text-15 text-ek-green-700">

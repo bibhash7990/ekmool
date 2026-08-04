@@ -11,7 +11,13 @@
   --color-ek-green-900: #1c3a2d; /* PRIMARY INK — headings, header/footer, buttons */
   --color-ek-green-700: #2c523f; /* hover states, secondary text on light */
   --color-ek-green-200: #c9d8cd; /* borders, dividers on light */
-  --color-ek-gold-600: #c4881f; /* gold hover/active + accessible gold text on paper */
+  /* Gold that is safe as INK, measured against every light surface we use:
+     4.75:1 on gold-100, 5.02:1 on cream, 5.38:1 on paper. gold-600 was
+     assumed readable and is not — it lands at 2.84:1 on paper, under even
+     the 3:1 large-text floor. Use gold-800 for any gold text or icon on a
+     light ground; keep 500/600 for fills, rules and use on dark green. */
+  --color-ek-gold-800: #8a5d0d;
+  --color-ek-gold-600: #c4881f; /* gold fills, hover fills, rules — not ink on light */
   --color-ek-gold-500: #d99a2b; /* TURMERIC GOLD — CTAs, accents, the root motif */
   --color-ek-gold-100: #f7e8cb; /* gold tint backgrounds, badges */
   --color-ek-cream: #f5efe2; /* ink on dark backgrounds */

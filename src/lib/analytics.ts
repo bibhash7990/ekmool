@@ -23,6 +23,8 @@ declare global {
   var posthog: PostHogLike | undefined;
 }
 
+export type { PostHogLike };
+
 export function track(event: AnalyticsEvent, properties?: Props): void {
   if (typeof window === "undefined") return;
   globalThis.posthog?.capture(event, properties);

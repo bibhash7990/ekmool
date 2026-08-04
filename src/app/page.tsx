@@ -67,7 +67,7 @@ export default function HomePage() {
             <h1 className="mt-6 font-display text-46 text-ek-green-900 lg:text-64">
               The root runs deeper
               <br />
-              than the <span className="text-ek-gold-600">badge</span>.
+              than the <span className="text-ek-gold-800">badge</span>.
             </h1>
 
             <p className="mt-7 max-w-[46ch] text-20 text-ek-green-700">
@@ -139,7 +139,7 @@ export default function HomePage() {
                     {origin.state}
                   </span>
                 </div>
-                <h3 className="mt-3 font-display text-26 text-ek-green-900 transition-colors group-hover:text-ek-gold-600">
+                <h3 className="mt-3 font-display text-26 text-ek-green-900 transition-colors group-hover:text-ek-gold-800">
                   {origin.district} {origin.product}
                 </h3>
                 <p className="mt-2.5 text-15 text-ek-green-700">

@@ -36,7 +36,7 @@ export function StockEditor({ row }: { row: StockRow }) {
             row.stockQty === 0
               ? "text-ek-terracotta"
               : row.isLow
-                ? "text-ek-gold-600"
+                ? "text-ek-gold-800"
                 : "text-ek-green-900"
           }`}
         >

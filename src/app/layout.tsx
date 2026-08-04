@@ -4,6 +4,7 @@ import "./globals.css";
 
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
+import { AnalyticsLoader } from "@/components/analytics/AnalyticsLoader";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { StoreProvider } from "@/store/StoreProvider";
 import { organizationJsonLd, webSiteJsonLd } from "@/lib/seo/jsonld";
@@ -84,6 +85,7 @@ export default function RootLayout({
             {children}
           </main>
           <Footer />
+          <AnalyticsLoader />
         </StoreProvider>
       </body>
     </html>

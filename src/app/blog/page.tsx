@@ -62,7 +62,7 @@ export default function BlogPage() {
               <h2 className="mt-4 font-display text-26 text-ek-green-900">
                 <Link
                   href={`/blog/${post.slug}`}
-                  className="transition-colors hover:text-ek-gold-600"
+                  className="transition-colors hover:text-ek-gold-800"
                 >
                   {post.title}
                 </Link>
@@ -70,7 +70,7 @@ export default function BlogPage() {
               <p className="mt-3 text-15 text-ek-green-700">{post.excerpt}</p>
               <Link
                 href={`/blog/${post.slug}`}
-                className="link-draw mt-4 inline-block text-15 text-ek-gold-600"
+                className="link-draw mt-4 inline-block text-15 text-ek-gold-800"
                 aria-label={`Read: ${post.title}`}
               >
                 Read the piece

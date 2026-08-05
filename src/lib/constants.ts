@@ -24,10 +24,13 @@ export const NAV_LINKS = [
 
 /**
  * Header-only. Kept out of NAV_LINKS because the footer renders that list
- * under "Company", and order tracking is not company information — it gets
- * its own footer entry alongside the policies.
+ * under "Company", and the account is not company information — it gets its
+ * own footer entry under Help.
+ *
+ * Points at /account rather than /track: with a session that is the order
+ * history, and without one the account layout redirects to /track anyway.
  */
-export const ACCOUNT_LINK = { href: "/track", label: "Orders" } as const;
+export const ACCOUNT_LINK = { href: "/account", label: "Orders" } as const;
 
 export const POLICY_LINKS = [
   { href: "/privacy-policy", label: "Privacy Policy" },

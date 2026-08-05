@@ -52,27 +52,38 @@ export const checkoutItemSchema = z.object({
   qty: z.number().int().min(1).max(10),
 });
 
+/** 10 digits, first digit 6-9 — the Indian mobile format. */
+export const phoneSchema = z
+  .string()
+  .trim()
+  .regex(/^[6-9]\d{9}$/, "Enter a 10-digit Indian mobile number");
+
+export const nameSchema = z.string().trim().min(2, "Enter your full name").max(160);
+
+/**
+ * Exported on its own so a saved address (src/db/queries/customers.ts) and
+ * a checkout address are validated by the same rules and share a shape —
+ * prefilling one from the other needs no field mapping.
+ */
+export const addressSchema = z.object({
+  line1: z.string().trim().min(4, "Enter your address").max(200),
+  line2: z.string().trim().max(200).optional().or(z.literal("")),
+  city: z.string().trim().min(2, "Enter your city").max(100),
+  state: z.enum(INDIAN_STATES, { message: "Select a state" }),
+  pincode: z
+    .string()
+    .trim()
+    .regex(/^[1-9]\d{5}$/, "Enter a 6-digit PIN code"),
+  landmark: z.string().trim().max(200).optional().or(z.literal("")),
+});
+
 export const checkoutSchema = z.object({
   customer: z.object({
-    name: z.string().trim().min(2, "Enter your full name").max(160),
+    name: nameSchema,
     email: z.email("Enter a valid email address").max(200),
-    // 10 digits, first digit 6-9 — the Indian mobile format.
-    phone: z
-      .string()
-      .trim()
-      .regex(/^[6-9]\d{9}$/, "Enter a 10-digit Indian mobile number"),
+    phone: phoneSchema,
   }),
-  address: z.object({
-    line1: z.string().trim().min(4, "Enter your address").max(200),
-    line2: z.string().trim().max(200).optional().or(z.literal("")),
-    city: z.string().trim().min(2, "Enter your city").max(100),
-    state: z.enum(INDIAN_STATES, { message: "Select a state" }),
-    pincode: z
-      .string()
-      .trim()
-      .regex(/^[1-9]\d{5}$/, "Enter a 6-digit PIN code"),
-    landmark: z.string().trim().max(200).optional().or(z.literal("")),
-  }),
+  address: addressSchema,
   paymentMethod: z.enum(["cod", "razorpay"]),
   items: z.array(checkoutItemSchema).min(1, "Your cart is empty").max(20),
   notes: z.string().trim().max(500).optional().or(z.literal("")),

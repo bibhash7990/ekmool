@@ -19,6 +19,7 @@ Nothing here is urgent. Do them in the order that matches what you need next.
 | **Cash on Delivery orders** | working |
 | Order confirmation page | working |
 | **Order tracking, history, cancellation** | working — `/track`, no auth provider involved |
+| **Customer account** — orders, profile, saved addresses | working — `/account`, same session, no Clerk |
 | Background jobs | working |
 | Emails | composed and recorded in `email_log` as `skipped_no_smtp`, not delivered |
 
@@ -122,6 +123,11 @@ prefix changes from `rzp_test_` to `rzp_live_`; nothing in the code changes.
 **Unlocks:** `/admin` (order management, status updates, tracking ids) and
 `/admin/stock`. Without it those routes return **404** — deliberately, so their
 existence is not advertised. **Guest checkout is never affected.**
+
+Clerk is for **you**, not your customers. The customer account at `/account`
+runs entirely on the order-lookup session and needs no keys at all; a
+configured Clerk account is merely accepted as a second way in, matched to
+the same customer by its verified email address.
 
 1. Sign up at <https://clerk.com> and create an application.
 2. Enable **Email** as a sign-in method. You do not need social logins.

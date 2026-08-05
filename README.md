@@ -115,7 +115,7 @@ All of these run against a live server and a live database, so start one first
 | Command | Covers |
 |---|---|
 | `npm run test:checkout` | Idempotency, atomic stock, oversell, webhook signature, rate limiting |
-| `npm run test:account` | Order lookup, enumeration resistance, session scoping, cancellation |
+| `npm run test:account` | Order lookup, enumeration resistance, session scoping, cancellation, the account area |
 | `npm run test:db-down` | Browsing with MySQL stopped (stop it first) |
 | `npm run test:jobs` | Cron authorisation, stale-order cancel, reminder dedupe |
 | `npm run validate:schema` | Titles, descriptions, canonicals, JSON-LD, internal links |
@@ -162,13 +162,16 @@ All of these run against a live server and a live database, so start one first
   is created implicitly at checkout by upserting on email
   (`upsertCustomerTx`), and a customer proves an order is theirs at `/track`
   with the reference plus that email. The signed cookie this sets carries the
-  verified address, and **that** is the account — order history, cancellation
-  and everything M9 adds are scoped to it. Clerk, when configured, is a second
-  door to the same place, never a requirement.
+  verified address, and **that** is the account — order history, profile,
+  addresses and cancellation are all scoped to it. Clerk, when configured, is
+  a second door to the same place, never a requirement.
 - **Scope customer data to the session email, never to a request parameter.**
-  `getSession()` is the only acceptable source. The order page is readable
-  with the ULID alone because that is the credential in the emailed link;
-  anything destructive requires the session.
+  `requireAccount()` in `src/lib/account.ts` is the only acceptable source
+  under `/account`, and every address query takes `customerId` in its `WHERE`
+  clause even where the row id alone would be unique — ownership is a
+  property of the query, not of the caller remembering to check. The order
+  page is readable with the ULID alone because that is the credential in the
+  emailed link; anything destructive requires the session.
 - **`SESSION_SECRET` lives on `globalThis`** when unset, not in module scope.
   Next bundles each route separately, so a plain module constant is a
   different value in `/api/account/lookup` than in `/track` — a cookie signed

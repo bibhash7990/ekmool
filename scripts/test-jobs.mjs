@@ -56,7 +56,7 @@ console.log(secret ? "CRON_SECRET is set\n" : "CRON_SECRET is NOT set\n");
 /* ---------- 1. Admin is invisible without Clerk ---------- */
 console.log("1. Admin surface without Clerk keys");
 {
-  for (const path of ["/admin", "/admin/stock", "/account"]) {
+  for (const path of ["/admin", "/admin/stock"]) {
     const response = await fetch(`${base}${path}`);
     check(
       `${path} returns 404 (not 403, not 500)`,
@@ -64,6 +64,18 @@ console.log("1. Admin surface without Clerk keys");
       `got ${response.status}`,
     );
   }
+
+  // /account used to 404 here too, because it was Clerk-gated. It is not
+  // any more: customers reach it with the session cookie from /track, and
+  // with no session it redirects to that door rather than pretending not
+  // to exist. Clerk has nothing to do with it either way.
+  const account = await fetch(`${base}/account`, { redirect: "manual" });
+  check(
+    "/account redirects to /track without a session",
+    [302, 303, 307].includes(account.status) &&
+      (account.headers.get("location") ?? "").endsWith("/track"),
+    `got ${account.status} → ${account.headers.get("location")}`,
+  );
 
   const robots = await (await fetch(`${base}/robots.txt`)).text();
   check("robots.txt disallows /admin", robots.includes("/admin"));

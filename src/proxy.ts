@@ -12,11 +12,13 @@ import { hasClerk } from "@/lib/env";
  * pay for this hop. Guest checkout never touches Clerk.
  */
 
-const isProtectedRoute = createRouteMatcher([
-  "/admin(.*)",
-  "/account(.*)",
-  "/api/admin(.*)",
-]);
+/**
+ * Only the owner's surfaces. /account is deliberately absent: a customer
+ * gets in with the signed session cookie from /track, and auth.protect()
+ * here would bounce them to a Clerk sign-in they have no account for.
+ * The account layout resolves the identity itself, accepting either door.
+ */
+const isProtectedRoute = createRouteMatcher(["/admin(.*)", "/api/admin(.*)"]);
 
 function applyRateLimit(request: NextRequest): NextResponse | null {
   const { pathname } = request.nextUrl;

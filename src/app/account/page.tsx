@@ -1,81 +1,112 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
-import { hasClerk } from "@/lib/env";
+
+import { requireAccount } from "@/lib/account";
 import { listOrdersByEmail } from "@/db/queries/account";
-import { formatPaise } from "@/lib/money";
-import { Eyebrow } from "@/components/ui/Eyebrow";
-import { SoilLine } from "@/components/ui/SoilLine";
-import { ButtonLink } from "@/components/ui/Button";
+import { listAddresses } from "@/db/queries/customers";
+import { OrderList } from "@/components/account/OrderList";
 
 export const dynamic = "force-dynamic";
 
-const DATE_FORMAT = new Intl.DateTimeFormat("en-IN", {
-  day: "numeric",
-  month: "short",
-  year: "numeric",
-});
-
 export default async function AccountPage() {
-  if (!hasClerk) notFound();
+  const { email, customer } = await requireAccount();
 
-  const { currentUser } = await import("@clerk/nextjs/server");
-  const user = await currentUser();
-  if (!user) notFound();
+  let orders: Awaited<ReturnType<typeof listOrdersByEmail>> = [];
+  let addresses: Awaited<ReturnType<typeof listAddresses>> = [];
+  let loadFailed = false;
 
-  // Orders are matched by the verified email on the Clerk account, since
-  // guest checkout means there is no customer_id to join on.
-  const email = user.primaryEmailAddress?.emailAddress ?? "";
-  const orders = email ? await listOrdersByEmail(email) : [];
+  try {
+    orders = await listOrdersByEmail(email);
+    if (customer) addresses = await listAddresses(customer.id);
+  } catch (error) {
+    console.error("[account] overview load failed:", error);
+    loadFailed = true;
+  }
+
+  if (loadFailed) {
+    return (
+      <p className="text-17 text-ek-green-700">
+        We could not load your account just now. Nothing has changed — please
+        try again in a moment.
+      </p>
+    );
+  }
+
+  // listAddresses sorts the default first.
+  const defaultAddress = addresses[0] ?? null;
+  const openOrders = orders.filter(
+    (order) => order.status !== "delivered" && order.status !== "cancelled",
+  );
 
   return (
-    <div className="mx-auto max-w-[860px] px-5 py-12 lg:py-16">
-      <Eyebrow>Your account</Eyebrow>
-      <h1 className="mt-5 font-display text-46 text-ek-green-900">
-        Order history
-      </h1>
-      <p className="mt-5 max-w-[54ch] text-17 text-ek-green-700">
-        Orders placed with <strong>{email}</strong>. Orders you placed as a
-        guest with a different email address will not appear here — the
-        confirmation link we emailed you still works.
-      </p>
-
-      <SoilLine align="left" className="my-10 max-w-xs" />
-
-      {orders.length === 0 ? (
-        <div>
-          <p className="text-17 text-ek-green-700">
-            No orders yet against this email address.
-          </p>
-          <ButtonLink href="/products" className="mt-7">
-            Browse the shop
-          </ButtonLink>
+    <div className="grid gap-12 lg:grid-cols-[1.5fr_1fr]">
+      <section aria-labelledby="recent-heading">
+        <h2 id="recent-heading" className="eyebrow text-ek-green-700">
+          {openOrders.length > 0 ? "On the way" : "Recent orders"}
+        </h2>
+        <div className="mt-6">
+          <OrderList
+            orders={(openOrders.length > 0 ? openOrders : orders).slice(0, 3)}
+            emptyMessage="You have not ordered from us yet."
+          />
         </div>
-      ) : (
-        <ul className="border-t border-ek-green-200">
-          {orders.map((order) => (
-            <li
-              key={order.id}
-              className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2 border-b border-ek-green-200 py-5"
-            >
-              <div>
-                <Link
-                  href={`/orders/${order.id}`}
-                  className="link-draw font-display text-20 text-ek-green-900"
-                >
-                  #{order.id.slice(-8).toUpperCase()}
-                </Link>
-                <p className="mt-1 text-15 text-ek-green-700">
-                  {DATE_FORMAT.format(order.createdAt)} · {order.itemCount} item
-                  {order.itemCount === 1 ? "" : "s"} · {order.status}
-                </p>
-              </div>
-              <p className="text-17 tabular-nums text-ek-green-900">
-                {formatPaise(order.totalPaise)}
-              </p>
-            </li>
-          ))}
-        </ul>
-      )}
+        {orders.length > 3 && (
+          <Link
+            href="/account/orders"
+            className="link-draw mt-6 inline-block text-17 text-ek-green-900"
+          >
+            All {orders.length} orders
+          </Link>
+        )}
+      </section>
+
+      <aside className="space-y-10">
+        <section aria-labelledby="details-heading">
+          <h2 id="details-heading" className="eyebrow text-ek-green-700">
+            Your details
+          </h2>
+          <p className="mt-5 text-17 text-ek-green-900">
+            {customer?.name ?? "—"}
+            <span className="mt-1 block text-15 text-ek-green-700">
+              {customer?.phone ?? "No phone number saved"}
+            </span>
+          </p>
+          <Link
+            href="/account/profile"
+            className="link-draw mt-4 inline-block text-15 text-ek-green-900"
+          >
+            Edit your details
+          </Link>
+        </section>
+
+        <section aria-labelledby="address-heading">
+          <h2 id="address-heading" className="eyebrow text-ek-green-700">
+            Default address
+          </h2>
+          {defaultAddress ? (
+            <address className="mt-5 text-15 leading-relaxed text-ek-green-700 not-italic">
+              <span className="block text-17 text-ek-green-900">
+                {defaultAddress.label}
+              </span>
+              {defaultAddress.line1}
+              <br />
+              {defaultAddress.city}, {defaultAddress.state}{" "}
+              {defaultAddress.pincode}
+            </address>
+          ) : (
+            <p className="mt-5 max-w-[36ch] text-15 text-ek-green-700">
+              Save one and checkout fills itself in next time.
+            </p>
+          )}
+          <Link
+            href="/account/addresses"
+            className="link-draw mt-4 inline-block text-15 text-ek-green-900"
+          >
+            {addresses.length > 0
+              ? `Manage ${addresses.length} address${addresses.length === 1 ? "" : "es"}`
+              : "Add an address"}
+          </Link>
+        </section>
+      </aside>
     </div>
   );
 }

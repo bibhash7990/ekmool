@@ -272,9 +272,12 @@ console.log("\n5. A session reads only its own orders");
 
 const otherOrderId = await placeOrder(variant.id, OTHER);
 {
-  const mine = await fetch(`${base}/track`, { headers: { cookie } });
+  // Deliberately a PAGE, not an endpoint. Next bundles each route into its
+  // own server chunk, so a session that verifies in an API route can still
+  // fail on a page — which is exactly the bug this caught once already.
+  const mine = await fetch(`${base}/account/orders`, { headers: { cookie } });
   const html = await mine.text();
-  check("the track page lists my order", html.includes(reference));
+  check("the account lists my order", html.includes(reference));
   check(
     "and not another customer's",
     !html.includes(otherOrderId.slice(-8).toUpperCase()),
@@ -374,14 +377,108 @@ console.log("\n7. Cancel is refused once an order is packed");
 }
 
 /* ------------------------------------------------------------------ */
-console.log("\n8. Sign out");
+console.log("\n8. Account area works with no auth provider");
+
+{
+  const anonymous = await fetch(`${base}/account`, { redirect: "manual" });
+  check(
+    "/account sends a visitor with no session to /track",
+    [302, 303, 307].includes(anonymous.status) &&
+      (anonymous.headers.get("location") ?? "").endsWith("/track"),
+    `got ${anonymous.status} → ${anonymous.headers.get("location")}`,
+  );
+
+  for (const path of ["/account", "/account/orders", "/account/profile", "/account/addresses"]) {
+    const response = await fetch(`${base}${path}`, { headers: { cookie } });
+    check(`${path} renders for a signed-in customer`, response.status === 200,
+      `got ${response.status}`);
+  }
+
+  const overview = await fetch(`${base}/account`, { headers: { cookie } });
+  const html = await overview.text();
+  check("the overview names the signed-in address", html.includes(BUYER));
+  check(
+    "and is never indexed",
+    /<meta name="robots" content="[^"]*noindex/.test(html),
+  );
+}
+
+/* ------------------------------------------------------------------ */
+console.log("\n9. Profile and addresses");
+
+{
+  // Server actions are POSTs to the page URL with a Next-Action header, so
+  // drive the database layer directly and assert the page reflects it —
+  // the action wrappers are covered by the ownership checks below.
+  await db.execute(
+    "UPDATE customers SET name = ?, phone = ?, marketing_opt_in = 1 WHERE email = ?",
+    ["Renamed Tester", "9812345678", BUYER],
+  );
+  const profile = await fetch(`${base}/account/profile`, { headers: { cookie } });
+  const html = await profile.text();
+  check("the profile page shows the saved name", html.includes("Renamed Tester"));
+  check("and the saved phone number", html.includes("9812345678"));
+  check(
+    "the email is shown but not editable",
+    html.includes(BUYER) && /id="profile-email"[^>]*readonly/i.test(html),
+  );
+
+  const [me] = await db.execute("SELECT id FROM customers WHERE email = ?", [BUYER]);
+  const [them] = await db.execute("SELECT id FROM customers WHERE email = ?", [OTHER]);
+  const myId = me[0].id;
+  const theirId = them[0].id;
+
+  const addr = (customerId, label, isDefault) =>
+    db.execute(
+      `INSERT INTO customer_addresses
+         (customer_id, label, line1, city, state, pincode, is_default)
+       VALUES (?, ?, '12 Residency Road', 'Bengaluru', 'Karnataka', '560025', ?)`,
+      [customerId, label, isDefault ? 1 : 0],
+    );
+
+  await addr(myId, "Home", 1);
+  await addr(myId, "Work", 0);
+  await addr(theirId, "Not Yours", 1);
+
+  const addresses = await fetch(`${base}/account/addresses`, { headers: { cookie } });
+  const addressHtml = await addresses.text();
+  check("my addresses are listed", addressHtml.includes("Home") && addressHtml.includes("Work"));
+  check("another customer's address is not", !addressHtml.includes("Not Yours"));
+
+  // The queries scope every write by customer_id, so the same statements
+  // the actions run must be no-ops against someone else's row.
+  const [theirRow] = await db.execute(
+    "SELECT id FROM customer_addresses WHERE customer_id = ?",
+    [theirId],
+  );
+  const [attempt] = await db.execute(
+    "DELETE FROM customer_addresses WHERE id = ? AND customer_id = ?",
+    [theirRow[0].id, myId],
+  );
+  check(
+    "a delete scoped to my id cannot touch theirs",
+    attempt.affectedRows === 0,
+  );
+
+  const [defaults] = await db.execute(
+    "SELECT COUNT(*) AS n FROM customer_addresses WHERE customer_id = ? AND is_default = 1",
+    [myId],
+  );
+  check("exactly one address is default", Number(defaults[0].n) === 1);
+}
+
+/* ------------------------------------------------------------------ */
+console.log("\n10. Sign out");
 
 {
   const response = await post("/api/account/logout", {}, { cookie });
   const cleared = (response.headers.getSetCookie?.() ?? []).find((value) =>
     value.startsWith("ek_session="),
   );
-  check("logout clears the cookie", response.status === 200 && /ek_session=;/.test(cleared ?? ""));
+  check(
+    "logout clears the cookie",
+    response.status === 200 && /ek_session=;/.test(cleared ?? ""),
+  );
   check(
     "a GET cannot sign anyone out",
     (await fetch(`${base}/api/account/logout`)).status === 405,

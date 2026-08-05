@@ -42,8 +42,8 @@ npm run db:up && npm run db:migrate && npm run db:seed
 npm run dev
 ```
 
-`.env.local` needs `CRON_SECRET` and `REVALIDATE_SECRET` filled in — any random
-hex will do:
+`.env.local` needs `CRON_SECRET`, `REVALIDATE_SECRET` and `SESSION_SECRET`
+filled in — any random hex will do, one value each:
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
@@ -115,6 +115,7 @@ All of these run against a live server and a live database, so start one first
 | Command | Covers |
 |---|---|
 | `npm run test:checkout` | Idempotency, atomic stock, oversell, webhook signature, rate limiting |
+| `npm run test:account` | Order lookup, enumeration resistance, session scoping, cancellation |
 | `npm run test:db-down` | Browsing with MySQL stopped (stop it first) |
 | `npm run test:jobs` | Cron authorisation, stale-order cancel, reminder dedupe |
 | `npm run validate:schema` | Titles, descriptions, canonicals, JSON-LD, internal links |
@@ -157,6 +158,21 @@ All of these run against a live server and a live database, so start one first
   that would otherwise be served during a database outage. Stock display rides
   the hourly window; the atomic decrement is what actually prevents
   overselling.
+- **There is no registration, and there must never be one.** A customer row
+  is created implicitly at checkout by upserting on email
+  (`upsertCustomerTx`), and a customer proves an order is theirs at `/track`
+  with the reference plus that email. The signed cookie this sets carries the
+  verified address, and **that** is the account — order history, cancellation
+  and everything M9 adds are scoped to it. Clerk, when configured, is a second
+  door to the same place, never a requirement.
+- **Scope customer data to the session email, never to a request parameter.**
+  `getSession()` is the only acceptable source. The order page is readable
+  with the ULID alone because that is the credential in the emailed link;
+  anything destructive requires the session.
+- **`SESSION_SECRET` lives on `globalThis`** when unset, not in module scope.
+  Next bundles each route separately, so a plain module constant is a
+  different value in `/api/account/lookup` than in `/track` — a cookie signed
+  by one then fails to verify in the other.
 - **Parameterised SQL only**, secrets only via env.
 - **Never fabricate social proof.** There are no ratings, no review counts, and
   scarcity messaging appears only when the stock number is literally true.

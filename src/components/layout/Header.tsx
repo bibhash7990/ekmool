@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { CartBadge } from "./CartBadge";
 import { MobileNav } from "./MobileNav";
-import { NAV_LINKS } from "@/lib/constants";
+import { ACCOUNT_LINK, NAV_LINKS } from "@/lib/constants";
 
 export function Header() {
   return (
@@ -37,7 +37,7 @@ export function Header() {
 
         <nav aria-label="Primary" className="hidden md:block">
           <ul className="flex items-center gap-8">
-            {NAV_LINKS.map((link) => (
+            {[...NAV_LINKS, ACCOUNT_LINK].map((link) => (
               <li key={link.href}>
                 <Link
                   href={link.href}

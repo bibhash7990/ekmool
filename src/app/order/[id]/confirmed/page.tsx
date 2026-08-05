@@ -168,8 +168,35 @@ export default async function OrderConfirmedPage({
         </section>
       </div>
 
+      <SoilLine className="my-12" />
+
+      <section aria-labelledby="keep-heading">
+        <h2 id="keep-heading" className="eyebrow text-ek-green-700">
+          Keep this reference
+        </h2>
+        <p className="mt-5 max-w-[54ch] text-17 text-ek-green-700">
+          <strong className="text-ek-green-900">#{shortId}</strong> plus the
+          email you used is all you ever need to reach this order — no account,
+          no password. Bookmark this page or{" "}
+          <Link
+            href={`/orders/${order.id}`}
+            className="link-draw text-ek-green-900"
+          >
+            open your order
+          </Link>{" "}
+          to follow it, change your mind, or see everything you have bought
+          from us.
+        </p>
+      </section>
+
       <div className="mt-12 flex flex-wrap items-center gap-6">
         <ButtonLink href="/products">Continue shopping</ButtonLink>
+        <Link
+          href={`/orders/${order.id}`}
+          className="link-draw text-17 text-ek-green-900"
+        >
+          Track this order
+        </Link>
         <Link href="/contact" className="link-draw text-17 text-ek-green-900">
           Need to change something?
         </Link>

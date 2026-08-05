@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { MenuIcon, CloseIcon } from "@/components/icons";
-import { NAV_LINKS } from "@/lib/constants";
+import { ACCOUNT_LINK, NAV_LINKS } from "@/lib/constants";
 
 export function MobileNav() {
   const [open, setOpen] = useState(false);
@@ -51,7 +51,7 @@ export function MobileNav() {
           </div>
           <nav aria-label="Mobile" className="px-5 py-6">
             <ul className="flex flex-col">
-              {NAV_LINKS.map((link) => (
+              {[...NAV_LINKS, ACCOUNT_LINK].map((link) => (
                 <li key={link.href} className="border-b border-ek-green-200">
                   <Link
                     href={link.href}

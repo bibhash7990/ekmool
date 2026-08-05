@@ -65,9 +65,17 @@ export function Footer() {
             </ul>
           </nav>
 
-          <nav aria-label="Policies">
-            <h2 className="eyebrow text-ek-cream/60">Policies</h2>
+          <nav aria-label="Help and policies">
+            <h2 className="eyebrow text-ek-cream/60">Help</h2>
             <ul className="mt-5 flex flex-col gap-3">
+              <li>
+                <Link
+                  href="/track"
+                  className="link-draw text-15 text-ek-cream/90 hover:text-ek-gold-500"
+                >
+                  Track your order
+                </Link>
+              </li>
               {POLICY_LINKS.map((link) => (
                 <li key={link.href}>
                   <Link

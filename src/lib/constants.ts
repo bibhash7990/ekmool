@@ -22,6 +22,13 @@ export const NAV_LINKS = [
   { href: "/contact", label: "Contact" },
 ] as const;
 
+/**
+ * Header-only. Kept out of NAV_LINKS because the footer renders that list
+ * under "Company", and order tracking is not company information — it gets
+ * its own footer entry alongside the policies.
+ */
+export const ACCOUNT_LINK = { href: "/track", label: "Orders" } as const;
+
 export const POLICY_LINKS = [
   { href: "/privacy-policy", label: "Privacy Policy" },
   { href: "/terms", label: "Terms of Service" },

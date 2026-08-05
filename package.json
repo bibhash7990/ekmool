@@ -14,6 +14,7 @@
     "loadtest": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/loadtest.mjs",
     "chaos": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/chaos.mjs",
     "validate:schema": "node scripts/validate-seo.mjs",
+    "test:account": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/test-account.mjs",
     "test:checkout": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/test-checkout.mjs",
     "test:db-down": "node scripts/test-db-down.mjs",
     "test:jobs": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/test-jobs.mjs",

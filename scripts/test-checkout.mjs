@@ -353,9 +353,14 @@ console.log("\n8. Order lookup");
 }
 
 /* ---------- cleanup ---------- */
-await db.execute(
-  "DELETE FROM orders WHERE customer_email IN ('test-buyer@example.com','t@example.com','rl@example.com')",
-);
+const TEST_EMAILS = [
+  "test-buyer@example.com",
+  "t@example.com",
+  "rl@example.com",
+];
+await db.query("DELETE FROM orders WHERE customer_email IN (?)", [TEST_EMAILS]);
+// Checkout creates a customer row per email address; drop those too.
+await db.query("DELETE FROM customers WHERE email IN (?)", [TEST_EMAILS]);
 
 console.log(`\n${passed} passed, ${failures.length} failed`);
 if (failures.length) {

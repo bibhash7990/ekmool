@@ -67,8 +67,15 @@ export class InMemoryTokenBucket implements RateLimiter {
 
 export const rateLimiter: RateLimiter = new InMemoryTokenBucket();
 
-/** Per-route limits from the brief: 10/min checkout, 60/min everything else. */
+/** Per-route limits: 5/min order lookup, 10/min checkout, 60/min the rest. */
 export function limitsFor(pathname: string): { limit: number; windowMs: number } {
+  // Stricter than checkout because this one is guessable in principle:
+  // order reference plus email is the only thing standing between a
+  // stranger and someone's order history. Five a minute makes enumeration
+  // pointless while leaving room for a customer mistyping twice.
+  if (pathname.startsWith("/api/account/lookup")) {
+    return { limit: 5, windowMs: 60_000 };
+  }
   if (pathname.startsWith("/api/checkout")) {
     return { limit: 10, windowMs: 60_000 };
   }

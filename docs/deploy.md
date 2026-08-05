@@ -36,9 +36,10 @@ every one with comments.
 | `DATABASE_HOST` / `_PORT` / `_USER` / `_PASSWORD` / `_NAME` | MySQL 8. |
 | `CRON_SECRET` | Guards `/api/jobs/*`. Jobs fail closed without it. |
 | `REVALIDATE_SECRET` | Guards `/api/revalidate`. |
+| `SESSION_SECRET` | Signs the customer session cookie. Omit it and the app generates one per process: every restart signs customers out, and instances cannot read each other's cookies. |
 | `ADMIN_EMAIL` | Low-stock reports. |
 
-Generate the two secrets:
+Generate the secrets:
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
@@ -177,7 +178,7 @@ Here you **do** want the proxy on, because there is no other CDN. Cache rules:
 |---|---|
 | `/_next/static/*`, `/brand/*` | Cache everything, edge TTL 1 year |
 | `/`, `/products*`, `/blog*`, `/about`, `/faq`, policy pages | Cache everything, edge TTL 1 hour, browser TTL 0 |
-| `/api/*`, `/cart`, `/checkout`, `/order/*`, `/admin*`, `/account*` | **Bypass cache** |
+| `/api/*`, `/cart`, `/checkout`, `/order/*`, `/orders/*`, `/track`, `/admin*`, `/account*` | **Bypass cache** |
 
 The bypass row is not optional. Caching `/api/checkout` would serve one
 buyer's order response to another.

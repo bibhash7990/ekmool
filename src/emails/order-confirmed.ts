@@ -71,7 +71,7 @@ export function buildOrderConfirmedEmail(
       ${escapeHtml(order.customerPhone)}
     </p>
 
-    ${emailButton(`${appUrl}/order/${order.id}/confirmed`, "View your order")}
+    ${emailButton(`${appUrl}/orders/${order.id}`, "View your order")}
 
     <p style="margin:8px 0 0;font-size:14px;">
       Questions? Reply to this email or write to us from the
@@ -102,7 +102,7 @@ export function buildOrderConfirmedEmail(
     `${order.address.city}, ${order.address.state} ${order.address.pincode}`,
     `${order.customerPhone}`,
     ``,
-    `View your order: ${appUrl}/order/${order.id}/confirmed`,
+    `View your order: ${appUrl}/orders/${order.id}`,
   ]
     .filter((line) => line !== "")
     .join("\n");

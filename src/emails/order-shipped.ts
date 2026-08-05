@@ -39,7 +39,7 @@ export function buildOrderShippedEmail(
         : ""
     }
 
-    ${emailButton(`${appUrl}/order/${order.id}/confirmed`, "View your order")}
+    ${emailButton(`${appUrl}/orders/${order.id}`, "View your order")}
 
     <p style="margin:8px 0 0;font-size:14px;">
       Once it arrives, store spices airtight and away from heat — not on the shelf above the hob.
@@ -59,7 +59,7 @@ export function buildOrderShippedEmail(
       ? `This is a Cash on Delivery order — please have the payment ready.`
       : ``,
     ``,
-    `View your order: ${appUrl}/order/${order.id}/confirmed`,
+    `View your order: ${appUrl}/orders/${order.id}`,
   ]
     .filter((line) => line !== "")
     .join("\n");

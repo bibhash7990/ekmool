@@ -2,6 +2,8 @@ import "server-only";
 import { ulid } from "ulidx";
 import type { PoolConnection, ResultSetHeader, RowDataPacket } from "mysql2/promise";
 import { getPool } from "@/db/pool";
+import { upsertCustomerTx } from "@/db/queries/customers";
+import { timingSafeEquals } from "@/lib/crypto";
 import type { CheckoutInput } from "@/lib/validation/checkout";
 import {
   FLAT_SHIPPING_PAISE,
@@ -158,15 +160,22 @@ export async function createOrder(input: {
     // COD is confirmed on placement; online payment waits for the webhook.
     const status: OrderStatus = paymentMethod === "cod" ? "confirmed" : "pending";
 
+    // The customer record is created here, implicitly, and only here. Nobody
+    // is asked to register. Deliberately after the variant locks so every
+    // transaction takes the same locks in the same order.
+    const customerId = await upsertCustomerTx(connection, customer);
+
     await connection.execute<ResultSetHeader>(
       `INSERT INTO orders
-         (id, idempotency_key, customer_name, customer_email, customer_phone,
-          address_line1, address_line2, address_city, address_state,
-          address_pincode, address_landmark, payment_method, payment_status,
-          subtotal_paise, shipping_paise, total_paise, status, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)`,
+         (id, customer_id, idempotency_key, customer_name, customer_email,
+          customer_phone, address_line1, address_line2, address_city,
+          address_state, address_pincode, address_landmark, payment_method,
+          payment_status, subtotal_paise, shipping_paise, total_paise,
+          status, notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)`,
       [
         orderId,
+        customerId,
         input.idempotencyKey,
         customer.name,
         customer.email.toLowerCase(),
@@ -443,4 +452,177 @@ export async function markPaymentFailed(
       WHERE razorpay_order_id = ? AND payment_status = 'pending'`,
     [razorpayOrderId],
   );
+}
+
+export interface OrderTimelineEntry {
+  fromStatus: string | null;
+  toStatus: string;
+  note: string | null;
+  actor: string;
+  createdAt: Date;
+}
+
+/**
+ * Everything that has happened to an order, oldest first. This table has
+ * been written on every transition since day one — placement, payment
+ * capture, admin updates, the stale-order job — so the customer-facing
+ * timeline needs no new schema and cannot drift from the truth.
+ */
+export async function getOrderTimeline(
+  orderId: string,
+): Promise<OrderTimelineEntry[]> {
+  const pool = getPool();
+  const [rows] = await pool.execute<RowDataPacket[]>(
+    `SELECT from_status, to_status, note, actor, created_at
+       FROM order_status_history
+      WHERE order_id = ?
+      ORDER BY created_at, id`,
+    [orderId],
+  );
+
+  return rows.map((row) => ({
+    fromStatus: row.from_status as string | null,
+    toStatus: row.to_status as string,
+    note: row.note as string | null,
+    actor: row.actor as string,
+    createdAt: row.created_at as Date,
+  }));
+}
+
+/**
+ * Candidate orders for a quoted eight-character reference. Returns the
+ * email so the caller can compare it in constant time — the comparison is
+ * deliberately not done here, because the caller must answer identically
+ * whether the reference or the email was wrong.
+ *
+ * Indexed by the generated order_ref column; the LIMIT is belt-and-braces
+ * against an improbable collision, not an expected case.
+ */
+export async function findOrdersByRef(
+  ref: string,
+): Promise<{ id: string; email: string }[]> {
+  const pool = getPool();
+  const [rows] = await pool.execute<RowDataPacket[]>(
+    `SELECT id, customer_email FROM orders
+      WHERE order_ref = ?
+      ORDER BY created_at DESC
+      LIMIT 5`,
+    [ref.toUpperCase()],
+  );
+  return rows.map((row) => ({
+    id: row.id as string,
+    email: row.customer_email as string,
+  }));
+}
+
+export type CancelRefusal =
+  | "not_found"
+  | "not_yours"
+  | "already_cancelled"
+  | "too_late"
+  | "prepaid";
+
+export type CancelResult =
+  | { ok: true; restored: { sku: string; qty: number }[] }
+  | { ok: false; reason: CancelRefusal };
+
+/** A customer may still call it off at these stages; after packing, they cannot. */
+const CUSTOMER_CANCELLABLE: OrderStatus[] = ["pending", "confirmed"];
+
+/**
+ * Self-service cancellation. Mirrors cancelStaleOrders in db/queries/jobs.ts
+ * exactly — same lock, same stock restoration, same history row — so there
+ * is one way an order is cancelled and one way stock comes back.
+ *
+ * The email must already have been verified (it comes from the session
+ * cookie, never from the request body).
+ *
+ * Prepaid orders are refused rather than cancelled. Cancelling one obliges
+ * us to refund it, and there is no refund integration yet; silently marking
+ * it cancelled while the customer's money sits with us would be worse than
+ * asking them to contact us.
+ */
+export async function cancelOrderByCustomer(
+  orderId: string,
+  verifiedEmail: string,
+): Promise<CancelResult> {
+  const pool = getPool();
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const [rows] = await connection.execute<RowDataPacket[]>(
+      `SELECT status, payment_status, customer_email
+         FROM orders WHERE id = ? FOR UPDATE`,
+      [orderId],
+    );
+    const order = rows[0];
+
+    if (!order) {
+      await connection.rollback();
+      return { ok: false, reason: "not_found" };
+    }
+
+    if (
+      !timingSafeEquals(
+        String(order.customer_email).toLowerCase(),
+        verifiedEmail.toLowerCase(),
+      )
+    ) {
+      await connection.rollback();
+      return { ok: false, reason: "not_yours" };
+    }
+
+    const status = order.status as OrderStatus;
+    if (status === "cancelled") {
+      await connection.rollback();
+      return { ok: false, reason: "already_cancelled" };
+    }
+    if (!CUSTOMER_CANCELLABLE.includes(status)) {
+      await connection.rollback();
+      return { ok: false, reason: "too_late" };
+    }
+    if (order.payment_status === "paid") {
+      await connection.rollback();
+      return { ok: false, reason: "prepaid" };
+    }
+
+    const [items] = await connection.execute<RowDataPacket[]>(
+      `SELECT variant_id, sku, qty FROM order_items WHERE order_id = ?`,
+      [orderId],
+    );
+
+    const restored: { sku: string; qty: number }[] = [];
+    for (const item of items) {
+      if (item.variant_id === null) continue;
+      await connection.execute<ResultSetHeader>(
+        `UPDATE product_variants SET stock_qty = stock_qty + ? WHERE id = ?`,
+        [item.qty, item.variant_id],
+      );
+      restored.push({ sku: item.sku as string, qty: Number(item.qty) });
+    }
+
+    await connection.execute<ResultSetHeader>(
+      `UPDATE orders SET status = 'cancelled' WHERE id = ?`,
+      [orderId],
+    );
+
+    await recordStatus(
+      connection,
+      orderId,
+      status,
+      "cancelled",
+      "Cancelled by customer; stock restored",
+      "customer",
+    );
+
+    await connection.commit();
+    return { ok: true, restored };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 }

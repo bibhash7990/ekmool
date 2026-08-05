@@ -333,9 +333,16 @@ console.log("\n3. Cleanup");
   }
 
   const [result] = await db.execute("DELETE FROM orders WHERE notes = 'chaos'");
+
+  // Checkout creates a customer row per email address, so the sweep has to
+  // reach those too or a run leaves hundreds of them behind.
+  const [customers] = await db.execute(
+    "DELETE FROM customers WHERE email LIKE 'chaos-%@example.com'",
+  );
+
   const restored = held.reduce((sum, r) => sum + Number(r.units), 0);
   console.log(
-    `  removed ${result.affectedRows} chaos orders, returned ${restored} units to stock`,
+    `  removed ${result.affectedRows} chaos orders and ${customers.affectedRows} customers, returned ${restored} units to stock`,
   );
 
   await db.end();

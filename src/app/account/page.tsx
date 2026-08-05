@@ -59,7 +59,7 @@ export default async function AccountPage() {
             >
               <div>
                 <Link
-                  href={`/order/${order.id}/confirmed`}
+                  href={`/orders/${order.id}`}
                   className="link-draw font-display text-20 text-ek-green-900"
                 >
                   #{order.id.slice(-8).toUpperCase()}

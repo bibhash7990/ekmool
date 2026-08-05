@@ -18,16 +18,24 @@ Nothing here is urgent. Do them in the order that matches what you need next.
 | Cart and checkout | working |
 | **Cash on Delivery orders** | working |
 | Order confirmation page | working |
+| **Order tracking, history, cancellation** | working — `/track`, no auth provider involved |
 | Background jobs | working |
 | Emails | composed and recorded in `email_log` as `skipped_no_smtp`, not delivered |
 
-To generate the two local secrets (already done in your `.env.local`):
+To generate the local secrets (already done in your `.env.local`):
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-Use one value for `CRON_SECRET` and a different one for `REVALIDATE_SECRET`.
+Use a different value for each of `CRON_SECRET`, `REVALIDATE_SECRET` and
+`SESSION_SECRET`.
+
+`SESSION_SECRET` signs the customer session cookie set at `/track`. It is the
+one variable here you should not leave blank in production: without it the
+app generates a secret per process, so every restart signs every customer
+out, and two instances behind a load balancer cannot read each other's
+cookies. It is not a signup — just 32 random bytes.
 
 ---
 

@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 
 import { getCatalog, getProductBySlug } from "@/db/queries/products";
-import { getProductContent } from "@/content/products";
+import { getProductContent, PRODUCT_CONTENT } from "@/content/products";
 import { appUrl } from "@/lib/env";
 import { formatPaise, paiseToRupees } from "@/lib/money";
 
@@ -30,9 +30,47 @@ const PRICE_VALID_UNTIL = new Date(Date.now() + 365 * 24 * 3600 * 1000)
   .toISOString()
   .slice(0, 10);
 
+/**
+ * The set of product pages that exist. Build-time only — with
+ * `dynamicParams = false` the result is baked into the prerender manifest
+ * and the running server resolves paths from that, never by calling this
+ * again.
+ *
+ * Which is why it must not quietly return an empty list. A build run
+ * against an unreachable or empty database would otherwise emit a
+ * storefront with zero product pages and still exit 0 — a silent, shippable
+ * catastrophe. PRODUCT_CONTENT is a compile-time constant and is the real
+ * authority on which pages exist; the database only decides whether a
+ * product is currently active. So prefer the database when it answers, and
+ * fall back to the content keys when it does not, which turns that silent
+ * failure into a loud one: the build proceeds to render those pages, the
+ * catalogue read fails again, and the build stops.
+ *
+ * The trade-off is that a genuinely empty `products` table also falls
+ * back. For a five-product catalogue that state means "the database is
+ * broken", not "we sell nothing".
+ */
 export async function generateStaticParams() {
-  const products = await getCatalog();
-  return products.map((p) => ({ slug: p.slug }));
+  const contentSlugs = Object.keys(PRODUCT_CONTENT);
+
+  try {
+    const products = await getCatalog();
+    if (products.length > 0) {
+      return products
+        .filter((product) => contentSlugs.includes(product.slug))
+        .map((product) => ({ slug: product.slug }));
+    }
+    console.error(
+      "[products] catalogue read returned no rows — keeping the known product paths rather than 404ing them",
+    );
+  } catch (error) {
+    console.error(
+      "[products] catalogue read failed in generateStaticParams — falling back to content slugs",
+      error,
+    );
+  }
+
+  return contentSlugs.map((slug) => ({ slug }));
 }
 
 export async function generateMetadata({

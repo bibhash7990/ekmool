@@ -1,0 +1,36 @@
+# node_modules is reinstalled inside the image. Copying the host's would be
+# both enormous and wrong: this project is developed on Windows, so sharp's
+# platform binaries would be win32 rather than linux-musl.
+node_modules
+.next
+out
+build
+
+# Secrets never enter an image layer. Compose injects them at runtime.
+.env
+.env.local
+.env.*.local
+
+.git
+.gitattributes
+.gitignore
+
+# Test and audit output, regenerated on demand.
+research/audits
+research/loadtest
+scripts/k6/data
+
+# Documentation. Note this is deliberately NOT a *.md glob — the blog posts
+# are src/app/blog/*/page.mdx and must be copied, since they compile into
+# routes.
+docs
+README.md
+AGENTS.md
+CLAUDE.md
+
+.vscode
+.idea
+npm-debug.log*
+*.tsbuildinfo
+.DS_Store
+Thumbs.db

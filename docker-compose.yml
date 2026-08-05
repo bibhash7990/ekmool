@@ -1,27 +1,195 @@
+# Ekmool — the whole stack.
+#
+#   docker compose up -d --build
+#
+# Brings up, in order: MySQL, schema + seed, the site build, the web server,
+# and the cron scheduler. The site is on http://localhost:3000.
+#
+# Add the reverse proxy (gzip offload + long-lived asset caching) with:
+#   docker compose --profile edge up -d --build
+#
+# Configuration comes from .env.local — the same file `npm run dev` uses.
+# Copy .env.example to .env.local first. Values that differ inside the
+# network (the database host, the cron target) are overridden per service
+# below and win over the file.
+#
+# Full notes, including production deployment: docs/docker.md
+
+name: ekmool
+
+# The migrate, build and cron containers are all the same image with
+# different commands, so their configuration is shared here rather than
+# repeated three times.
+x-env-files: &env-files
+  # Both optional, later wins — the same precedence Next itself applies, so
+  # a value behaves the same under `npm run dev` and under compose.
+  #
+  # One caveat worth knowing: compose expands ${VAR} in THIS file from the
+  # shell and from `.env` only — never from `.env.local`. That only affects
+  # the mysql service below, which needs its credentials at container-init
+  # time. If you change DATABASE_USER or DATABASE_PASSWORD, put them in
+  # `.env` as well, or MySQL will initialise with one password while the app
+  # connects with another.
+  - path: .env
+    required: false
+  - path: .env.local
+    required: false
+
+x-app-image: &app-image
+  build:
+    context: .
+    target: builder
+  image: ekmool-builder:local
+  env_file: *env-files
+  environment:
+    DATABASE_HOST: mysql
+    DATABASE_PORT: "3306"
+  networks: [ekmool]
+
 services:
   mysql:
     image: mysql:8.4
     container_name: ekmool-mysql
     restart: unless-stopped
     ports:
+      # Published so host tooling (npm run test:checkout, scripts/loadtest.mjs,
+      # a GUI client) can still reach it. Drop this line in production — the
+      # app talks to it over the compose network and nothing else should.
       - "3306:3306"
     environment:
-      MYSQL_ROOT_PASSWORD: ekmool_root_dev
-      MYSQL_DATABASE: ekmool
-      MYSQL_USER: ekmool
-      MYSQL_PASSWORD: ekmool_dev
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-ekmool_root_dev}
+      MYSQL_DATABASE: ${DATABASE_NAME:-ekmool}
+      MYSQL_USER: ${DATABASE_USER:-ekmool}
+      MYSQL_PASSWORD: ${DATABASE_PASSWORD:-ekmool_dev}
     command:
       - mysqld
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_0900_ai_ci
     volumes:
-      - ekmool-mysql-data:/var/lib/mysql
+      - mysql-data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-pekmool_root_dev"]
+      # `-h localhost` connects over the unix socket, which answers during
+      # MySQL's first-run initialisation while the TCP listener is still
+      # down. Compose then reports the container healthy and starts the
+      # migration, which immediately gets ECONNREFUSED.
+      #
+      # So: force TCP, and authenticate as the application user against the
+      # application database, which additionally proves both were created
+      # rather than just that a server is listening.
+      test:
+        ["CMD", "mysql", "-h", "127.0.0.1", "--protocol=TCP",
+         "-u", "${DATABASE_USER:-ekmool}",
+         "-p${DATABASE_PASSWORD:-ekmool_dev}",
+         "-e", "SELECT 1",
+         "${DATABASE_NAME:-ekmool}"]
       interval: 5s
-      timeout: 3s
-      retries: 20
-      start_period: 20s
+      timeout: 5s
+      retries: 30
+      start_period: 40s
+    networks: [ekmool]
+
+  # One-shot. Schema, then catalogue content.
+  migrate:
+    <<: *app-image
+    container_name: ekmool-migrate
+    command: ["sh", "docker/migrate.sh"]
+    restart: "no"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  # One-shot. Generates the site and publishes it to the app-build volume.
+  #
+  # This is a service rather than a `docker build` step because every product
+  # page is prerendered from MySQL, and a build container has no route to a
+  # compose service. Here it simply shares the network.
+  builder:
+    <<: *app-image
+    container_name: ekmool-builder
+    command: ["sh", "docker/build.sh"]
+    restart: "no"
+    environment:
+      DATABASE_HOST: mysql
+      DATABASE_PORT: "3306"
+      OUT_DIR: /out
+    volumes:
+      - app-build:/out
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  app:
+    build:
+      context: .
+      target: runner
+    image: ekmool-app:local
+    # Deliberately unnamed: a fixed container_name makes
+    # `docker compose up -d --scale app=4` fail, and scaling out is the
+    # documented answer to one Node process saturating a core at ~450 rps.
+    restart: unless-stopped
+    env_file: *env-files
+    environment:
+      DATABASE_HOST: mysql
+      DATABASE_PORT: "3306"
+      PORT: "3000"
+      HOSTNAME: 0.0.0.0
+    ports:
+      # Publishing a fixed host port means only one replica can bind it, so
+      # this line and `--scale app=N` are mutually exclusive. To scale, run
+      # the edge profile and let nginx be the only thing published:
+      #   docker compose --profile edge up -d --scale app=4
+      #   (with this ports block commented out)
+      - "${APP_PORT:-3000}:3000"
+    volumes:
+      # Read-only: the server should never write to its own build output.
+      - app-build:/app/dist:ro
+    depends_on:
+      builder:
+        condition: service_completed_successfully
+    networks: [ekmool]
+
+  # The three scheduled jobs, in IST. On Vercel these are driven by
+  # vercel.json instead — run one or the other, never both, or customers get
+  # duplicate reminder emails.
+  cron:
+    <<: *app-image
+    container_name: ekmool-cron
+    restart: unless-stopped
+    command: ["npm", "run", "cron"]
+    environment:
+      DATABASE_HOST: mysql
+      DATABASE_PORT: "3306"
+      # Internal address, not the public one. NEXT_PUBLIC_APP_URL is the
+      # customer-facing origin and may not even resolve from in here.
+      CRON_TARGET_URL: http://app:3000
+    depends_on:
+      app:
+        condition: service_healthy
+
+  # Optional: `docker compose --profile edge up -d`.
+  #
+  # Worth turning on for anything public-facing. Load testing showed gzip in
+  # the Node process is the single largest CPU cost under traffic — moving it
+  # here frees the origin to do the thing only it can do. See
+  # docs/loadtest.md.
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: ekmool-nginx
+    restart: unless-stopped
+    profiles: [edge]
+    ports:
+      - "${EDGE_PORT:-8080}:80"
+    volumes:
+      - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      app:
+        condition: service_healthy
+    networks: [ekmool]
 
 volumes:
-  ekmool-mysql-data:
+  mysql-data:
+  app-build:
+
+networks:
+  ekmool:
+    driver: bridge

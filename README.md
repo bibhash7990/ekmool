@@ -10,9 +10,25 @@ Next.js 16 · React 19 · Tailwind v4 · MySQL 8 · TypeScript strict
 
 ## Quick start
 
-You need Node 22 and Docker. Nothing else — **no API keys are required**. The
-site builds, runs, and takes Cash on Delivery orders end to end with only a
-database.
+**No API keys are required.** The site builds, runs, and takes Cash on
+Delivery orders end to end with only a database.
+
+### Everything in Docker — one command
+
+Needs only Docker. Brings up MySQL, the schema, the catalogue content, the
+site build, the web server and the cron scheduler:
+
+```bash
+cp .env.example .env.local && docker compose up -d --build
+```
+
+Then open http://localhost:3000. Add nginx (gzip offload + caching, and a
+large difference under load) with `docker compose --profile edge up -d --build`,
+which serves on :8080. Details in [docs/docker.md](docs/docker.md).
+
+### Or locally, with Node
+
+Needs Node 22 and Docker for the database:
 
 ```bash
 npm install && cp .env.example .env.local
@@ -25,8 +41,6 @@ npm run db:up && npm run db:migrate && npm run db:seed
 ```bash
 npm run dev
 ```
-
-Then open http://localhost:3000.
 
 `.env.local` needs `CRON_SECRET` and `REVALIDATE_SECRET` filled in — any random
 hex will do:
@@ -86,6 +100,8 @@ Numbers and method: [docs/loadtest.md](docs/loadtest.md).
 | `npm run standalone` | Assemble `.next/standalone` (copies static, public, env) |
 | `npm run standalone:start` | Run the standalone bundle |
 | `npm run typecheck` / `lint` | TypeScript and ESLint |
+| `npm run docker:up` / `docker:edge` | Whole stack, without / with nginx |
+| `npm run docker:logs` / `docker:down` / `docker:reset` | Tail, stop, wipe |
 | `npm run db:up` / `db:down` | Start/stop the MySQL container |
 | `npm run db:migrate` / `db:seed` | Schema and catalogue content |
 | `npm run db:reset-stock` | Restore stock after load testing (dev only) |
@@ -115,6 +131,7 @@ All of these run against a live server and a live database, so start one first
 
 | | |
 |---|---|
+| [docs/docker.md](docs/docker.md) | The one-command stack, the edge profile, deploying it |
 | [docs/keys-needed.md](docs/keys-needed.md) | What to sign up for, in what order, and what each unlocks |
 | [docs/deploy.md](docs/deploy.md) | Vercel and VPS paths, CDN cache rules, cron, email DNS |
 | [docs/audit.md](docs/audit.md) | Lighthouse results and the defects the gates caught |

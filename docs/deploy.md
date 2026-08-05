@@ -1,8 +1,16 @@
 # Deploying Ekmool
 
-Two paths. **Vercel** is the shorter one and the one to take unless you have a
-reason not to. **A VPS** costs less at steady state and keeps the database on
-the same private network as the app.
+Three paths.
+
+**Docker Compose** is the one to reach for if you have a server: the whole
+stack — database, build, web, cron, reverse proxy — comes up with one
+command, and updating is `git pull` plus that same command. It is documented
+separately in **[docker.md](docker.md)**; the Cloudflare, email and rollback
+sections below still apply to it.
+
+**Vercel** is the shortest path of all if you would rather not run a server.
+**A bare VPS with PM2** costs less at steady state and is what the rest of
+this document covers alongside Vercel.
 
 Either way the shape is the same: a CDN answers every public page, and the
 origin only ever sees checkout, orders, the payment webhook, admin, and cron.

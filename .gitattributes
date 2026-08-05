@@ -1,0 +1,15 @@
+# This project is developed on Windows and runs in Linux containers.
+#
+# Shell scripts MUST keep LF endings. A .sh file checked out with CRLF fails
+# inside Alpine with "no such file or directory" — pointing at the
+# interpreter, not the script — because the kernel reads the shebang as
+# "/bin/sh\r". It is a genuinely confusing hour to lose.
+*.sh text eol=lf
+Dockerfile text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+docker/* text eol=lf
+
+# Everything else: normalise to LF in the repository, let Git hand Windows
+# whatever it prefers in the working tree.
+* text=auto

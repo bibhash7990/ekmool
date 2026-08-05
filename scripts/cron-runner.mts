@@ -18,7 +18,20 @@ import { loadEnv } from "./load-env.mts";
 
 loadEnv();
 
-const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+/**
+ * Where to POST the job routes. This is an INTERNAL address, which is not
+ * the same thing as the public one: under Docker the app is reachable at
+ * http://app:3000 on the compose network, while NEXT_PUBLIC_APP_URL is the
+ * customer-facing https:// origin used for canonicals and emails. Sending
+ * cron traffic to the public URL would leave the container depending on
+ * DNS and TLS it does not need, and would fail outright before the domain
+ * exists. Falls back to the public URL for the PM2/bare-metal case, where
+ * they legitimately are the same host.
+ */
+const BASE_URL =
+  process.env.CRON_TARGET_URL ??
+  process.env.NEXT_PUBLIC_APP_URL ??
+  "http://localhost:3000";
 const SECRET = process.env.CRON_SECRET ?? "";
 const TIMEZONE = "Asia/Kolkata";
 

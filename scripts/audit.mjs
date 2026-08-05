@@ -31,7 +31,24 @@ const THRESHOLDS = {
   "best-practices": 95,
 };
 
-const SCRIPT_BUDGET_KB = 170;
+/**
+ * Transferred script bytes per page.
+ *
+ * Raised from 170 to 190 in M11, and the reason is worth recording so the
+ * next person does not raise it again by reflex.
+ *
+ * The consent layer cost ~15 KB transferred on every page: the banner, the
+ * footer control that lets a decision be withdrawn, and the store the two
+ * share. That is not slack — it is a legally required feature under the DPDP
+ * Act 2023, and most of the weight is the copy explaining what each category
+ * actually does. Shortening that prose would buy bytes by making the consent
+ * less informed, which is optimising precisely the wrong thing.
+ *
+ * Measured before and after on the same build machine: 166 KB at M10,
+ * 181 KB at M11. The headroom left is deliberately thin, because this number
+ * exists to catch creep and a generous budget catches nothing.
+ */
+const SCRIPT_BUDGET_KB = 190;
 
 const results = [];
 const failures = [];

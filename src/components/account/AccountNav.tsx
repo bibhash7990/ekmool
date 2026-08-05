@@ -8,6 +8,7 @@ const TABS = [
   { href: "/account/orders", label: "Orders" },
   { href: "/account/profile", label: "Profile" },
   { href: "/account/addresses", label: "Addresses" },
+  { href: "/account/privacy", label: "Your data" },
 ] as const;
 
 export function AccountNav() {

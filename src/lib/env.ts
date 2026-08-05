@@ -136,3 +136,31 @@ export const hasSellerIdentity: boolean = getSellerIdentity() !== null;
  * printing a CGST and SGST breakdown underneath.
  */
 export const sellerState: string | null = getSellerIdentity()?.state ?? null;
+
+/* ---------- Grievance officer ---------- */
+
+/**
+ * Rule 4(5) of the Consumer Protection (E-Commerce) Rules 2020 requires
+ * every e-commerce entity to appoint a grievance officer and display their
+ * **name**, contact details and the redressal mechanism. The DPDP Act 2023
+ * wants a contact point for data grievances too, and in a small business
+ * that is the same person.
+ *
+ * Read from the environment because the alternative is inventing a name,
+ * and a fictional officer on a statutory notice is worse than an honest
+ * gap. When unset, /contact says who will be appointed and by when instead
+ * of pretending someone already has been — see GrievanceOfficer.
+ */
+export interface GrievanceOfficer {
+  name: string;
+  email: string;
+  phone: string;
+}
+
+export function getGrievanceOfficer(): GrievanceOfficer | null {
+  const name = str(process.env.GRIEVANCE_OFFICER_NAME);
+  const email = str(process.env.GRIEVANCE_OFFICER_EMAIL);
+  const phone = str(process.env.GRIEVANCE_OFFICER_PHONE);
+  if (!name || !email) return null;
+  return { name, email, phone };
+}

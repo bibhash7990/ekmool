@@ -1,26 +1,48 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
+import {
+  getConsentServerSnapshot,
+  getConsentSnapshot,
+  subscribeConsent,
+} from "@/lib/consent";
 
 /**
- * Loads PostHog lazily, and only when a key is configured.
+ * Loads PostHog lazily, and only when a key is configured **and** the
+ * visitor has consented to analytics.
  *
- * posthog-js is dynamically imported on idle (or first interaction,
- * whichever comes first), so it never lands in the initial bundle and
- * cannot compete with the LCP. Requests go through the /ingest rewrite
+ * The consent check is the load condition, not a filter applied afterwards.
+ * `import("posthog-js")` is never reached without a yes, so nothing is
+ * fetched, nothing is initialised, and no cookie is written — the banner is
+ * not decorating a tracker that runs regardless. That is what
+ * `npm run test:consent` asserts, by watching what the page requests.
+ *
+ * posthog-js is dynamically imported on idle (or first interaction after
+ * consent, whichever comes first), so it never lands in the initial bundle
+ * and cannot compete with the LCP. Requests go through the /ingest rewrite
  * on our own origin, which survives ad-blockers.
  *
  * Once loaded it is attached to globalThis.posthog, which is what
- * lib/analytics.ts `track()` calls into — before that, every track() is
- * a silent no-op.
+ * lib/analytics.ts `track()` calls into — before that, every track() is a
+ * silent no-op.
  */
 export function AnalyticsLoader() {
   const key = process.env.NEXT_PUBLIC_POSTHOG_KEY;
   const pathname = usePathname();
 
+  const decision = useSyncExternalStore(
+    subscribeConsent,
+    getConsentSnapshot,
+    getConsentServerSnapshot,
+  );
+
+  // "unread" and "undecided" both deny. Deny is the default, and a visitor
+  // who has not answered has not consented.
+  const allowed = decision !== "unread" && decision !== "undecided" && decision.analytics;
+
   useEffect(() => {
-    if (!key || globalThis.posthog) return;
+    if (!key || !allowed || globalThis.posthog) return;
 
     let cancelled = false;
 
@@ -65,13 +87,15 @@ export function AnalyticsLoader() {
       window.removeEventListener("pointerdown", onInteract);
       window.removeEventListener("keydown", onInteract);
     };
-  }, [key]);
+  }, [key, allowed]);
 
   // App Router client navigations do not emit a native pageview.
   useEffect(() => {
-    if (!key) return;
-    globalThis.posthog?.capture("$pageview", { $current_url: window.location.href });
-  }, [pathname, key]);
+    if (!key || !allowed) return;
+    globalThis.posthog?.capture("$pageview", {
+      $current_url: window.location.href,
+    });
+  }, [pathname, key, allowed]);
 
   return null;
 }

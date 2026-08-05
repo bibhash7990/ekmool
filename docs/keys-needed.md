@@ -258,6 +258,69 @@ FY (1 April – 31 March), allocated under `SELECT ... FOR UPDATE`.
 
 ---
 
+## 7. Cloudflare Turnstile — CAPTCHA
+
+**Unlocks:** a bot check on checkout and on order lookup.
+
+Free at any volume, and it shows a real customer no puzzle — no traffic
+lights, no crosswalks, usually nothing at all. It needs no npm dependency
+either: a script tag and one `fetch` from the server.
+
+1. Sign up at <https://dash.cloudflare.com> → **Turnstile** → **Add widget**.
+2. Add your domain (and `localhost` if you want it in development).
+3. Widget mode **Managed** is the right default.
+
+```
+NEXT_PUBLIC_TURNSTILE_SITE_KEY=0x4AAAAAAA...
+TURNSTILE_SECRET_KEY=0x4AAAAAAA...
+```
+
+**Both halves or neither.** One without the other is a misconfiguration and
+the code treats it as unconfigured rather than half-enforcing something.
+
+Unset, no widget renders and no verification call is made. The **honeypot**
+still runs on both forms either way — it costs nothing, catches the naive
+bots that make up most of the noise, and cannot produce a false positive
+because no human can type into a field that is out of the layout, out of the
+tab order and hidden from screen readers.
+
+If Cloudflare is unreachable or returns an error, verification **fails
+open**: the shop stays up, and the honeypot and rate limiter still apply.
+Taking checkout down because someone else's service is having a bad day is
+the wrong failure mode for a shop.
+
+---
+
+## 8. Your grievance officer
+
+Not a signup either, and unlike everything else in this file it is not
+optional if you intend to trade.
+
+Rule 4(5) of the **Consumer Protection (E-Commerce) Rules 2020** requires
+every e-commerce entity to appoint a grievance officer and display their
+**name** and contact details on the site, to acknowledge a complaint within
+48 hours, and to resolve it within one month. The **DPDP Act 2023** wants a
+contact point for data grievances, which for a shop this size is the same
+person.
+
+```
+GRIEVANCE_OFFICER_NAME=Priya Menon
+GRIEVANCE_OFFICER_EMAIL=grievance@ekmool.com
+GRIEVANCE_OFFICER_PHONE=+91 80 4123 4567
+```
+
+Name and email are the minimum; the phone number is shown when set. The
+notice appears on `/contact` and is linked from the footer of every page,
+with the statutory timelines stated as commitments and the National Consumer
+Helpline given as the escalation route.
+
+Leave it unset and the page says no officer has been appointed yet, points
+at `orders@ekmool.com`, and keeps the timelines. That is deliberate — an
+invented name on a statutory notice would be worse than the gap it hides —
+but **it is still a gap**. Fill it in.
+
+---
+
 ## Where the values go
 
 - **Local development:** `.env.local` (git-ignored). `.env.example` is the

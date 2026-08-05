@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { CheckoutForm } from "@/components/checkout/CheckoutForm";
+import { turnstileSiteKey } from "@/lib/turnstile";
 import { Eyebrow } from "@/components/ui/Eyebrow";
 import { hasRazorpay } from "@/lib/env";
 
@@ -18,7 +19,10 @@ export default function CheckoutPage() {
       <h1 className="mt-5 font-display text-46 text-ek-green-900">Checkout</h1>
       <div className="mt-12">
         {/* Server decides whether online payment can be offered at all. */}
-        <CheckoutForm razorpayEnabled={hasRazorpay} />
+        <CheckoutForm
+          razorpayEnabled={hasRazorpay}
+          turnstileSiteKey={turnstileSiteKey}
+        />
       </div>
     </div>
   );

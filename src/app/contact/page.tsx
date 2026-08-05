@@ -5,6 +5,7 @@ import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
 import { Eyebrow } from "@/components/ui/Eyebrow";
 import { SoilLine } from "@/components/ui/SoilLine";
 import { PhotoPlaceholder } from "@/components/ui/PhotoPlaceholder";
+import { GrievanceOfficerNotice } from "@/components/layout/GrievanceOfficer";
 
 export const metadata: Metadata = {
   title: "Contact Ekmool — Orders, Sourcing & Bulk Enquiries",
@@ -138,6 +139,8 @@ export default function ContactPage() {
               </div>
             </dl>
           </section>
+
+          <GrievanceOfficerNotice className="mt-10 border border-ek-green-200 p-6" />
         </aside>
       </div>
     </div>

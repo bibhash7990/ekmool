@@ -4,6 +4,9 @@ import { findOrdersByRef } from "@/db/queries/orders";
 import { timingSafeEquals } from "@/lib/crypto";
 import { attachSession } from "@/lib/session";
 import { DbUnconfiguredError } from "@/db/pool";
+import { verifyChallenge } from "@/lib/turnstile";
+import { HONEYPOT_FIELD } from "@/lib/honeypot";
+import { clientIp } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -63,6 +66,19 @@ export async function POST(request: NextRequest) {
       { error: "Malformed JSON body", code: "BAD_REQUEST" },
       { status: 400 },
     );
+  }
+
+  // Returns the standard FAILURE, not a distinct challenge error. A prober
+  // must not be able to tell a tripped honeypot from a wrong email, or they
+  // learn the shape of the defence and route around it.
+  const envelope = (payload ?? {}) as Record<string, unknown>;
+  const challenge = await verifyChallenge({
+    honeypot: envelope[HONEYPOT_FIELD],
+    token: envelope.turnstileToken,
+    ip: clientIp(request.headers),
+  });
+  if (!challenge.ok) {
+    return NextResponse.json(FAILURE, { status: 404 });
   }
 
   const parsed = lookupSchema.safeParse(payload);

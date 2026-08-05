@@ -5,6 +5,7 @@ import "./globals.css";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { AnalyticsLoader } from "@/components/analytics/AnalyticsLoader";
+import { ConsentBanner } from "@/components/consent/ConsentBanner";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { StoreProvider } from "@/store/StoreProvider";
 import { organizationJsonLd, webSiteJsonLd } from "@/lib/seo/jsonld";
@@ -86,6 +87,7 @@ export default function RootLayout({
           </main>
           <Footer />
           <AnalyticsLoader />
+          <ConsentBanner />
         </StoreProvider>
       </body>
     </html>

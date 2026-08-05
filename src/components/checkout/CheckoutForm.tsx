@@ -21,6 +21,9 @@ import {
 } from "@/lib/constants";
 import { checkoutSchema, INDIAN_STATE_OPTIONS } from "@/lib/validation/checkout";
 import { track } from "@/lib/analytics";
+import { HONEYPOT_FIELD, readHoneypot } from "@/lib/honeypot";
+import { HoneypotField } from "@/components/security/HoneypotField";
+import { TurnstileWidget } from "@/components/security/TurnstileWidget";
 
 interface RazorpayOptions {
   key: string;
@@ -72,8 +75,11 @@ const EMPTY_FORM = {
 
 export function CheckoutForm({
   razorpayEnabled,
+  turnstileSiteKey = "",
 }: {
   razorpayEnabled: boolean;
+  /** Empty unless Turnstile is configured, in which case no widget renders. */
+  turnstileSiteKey?: string;
 }) {
   const router = useRouter();
   const dispatch = useAppDispatch();
@@ -86,6 +92,7 @@ export function CheckoutForm({
   const [errors, setErrors] = useState<FieldErrors>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState("");
   const errorRef = useRef<HTMLDivElement>(null);
 
   /**
@@ -195,9 +202,13 @@ export function CheckoutForm({
     };
   }
 
-  async function handleSubmit(event: React.FormEvent) {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitError(null);
+
+    // Captured before any await: React nulls currentTarget once the handler
+    // returns, and this is read after the fetch has begun.
+    const honeypot = readHoneypot(event.currentTarget);
 
     // Validate client-side with the exact schema the server uses.
     const parsed = checkoutSchema.safeParse(buildPayload());
@@ -223,7 +234,11 @@ export function CheckoutForm({
           "content-type": "application/json",
           "idempotency-key": currentIdempotencyKey(),
         },
-        body: JSON.stringify(parsed.data),
+        body: JSON.stringify({
+          ...parsed.data,
+          turnstileToken,
+          [HONEYPOT_FIELD]: honeypot,
+        }),
       });
 
       const data = await response.json();
@@ -573,6 +588,16 @@ export function CheckoutForm({
               <dd className="tabular-nums">{formatPaise(total)}</dd>
             </div>
           </dl>
+
+          <HoneypotField />
+
+          {turnstileSiteKey && (
+            <TurnstileWidget
+              siteKey={turnstileSiteKey}
+              action="checkout"
+              onToken={setTurnstileToken}
+            />
+          )}
 
           <Button
             type="submit"

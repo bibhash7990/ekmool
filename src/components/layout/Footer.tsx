@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { NAV_LINKS, POLICY_LINKS, SITE_TAGLINE } from "@/lib/constants";
 import { PRODUCT_SLUGS } from "@/lib/constants";
+import { ConsentSettingsLink } from "@/components/consent/ConsentSettingsLink";
 
 const PRODUCT_NAMES: Record<string, string> = {
   "kandhamal-turmeric-powder": "Kandhamal Turmeric",
@@ -89,13 +90,36 @@ export function Footer() {
                   </Link>
                 </li>
               ))}
+              <li>
+                {/* Rule 4(5) of the Consumer Protection (E-Commerce) Rules
+                    2020 requires this to be displayed, which means findable
+                    from every page, not filed on one.
+
+                    A plain <a>, not <Link>: this sits in the footer of every
+                    page, and Link prefetches the /contact route chunk the
+                    moment the footer scrolls into view. Those are real
+                    transferred bytes against a measured 170 KB budget, spent
+                    on a link most people will never click. */}
+                <a
+                  href="/contact#grievance"
+                  className="link-draw text-15 text-ek-cream/90 hover:text-ek-gold-500"
+                >
+                  Grievance officer
+                </a>
+              </li>
             </ul>
           </nav>
         </div>
 
         <div className="mt-14 flex flex-col gap-3 border-t border-ek-cream/15 pt-8 text-15 text-ek-cream/60 sm:flex-row sm:items-center sm:justify-between">
           <p>© {year} Ekmool. All rights reserved.</p>
-          <p>FSSAI licensed · Made in India</p>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
+            {/* Withdrawing consent has to be as easy as giving it, so this
+                sits on every page rather than inside an account area a
+                guest does not have. */}
+            <ConsentSettingsLink className="min-h-11 cursor-pointer text-left underline underline-offset-4 hover:text-ek-gold-500 sm:min-h-0" />
+            <p>FSSAI licensed · Made in India</p>
+          </div>
         </div>
       </div>
     </footer>

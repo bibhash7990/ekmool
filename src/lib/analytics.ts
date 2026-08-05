@@ -1,8 +1,8 @@
 /**
  * Analytics façade. Call `track()` from anywhere in client code — it is a
- * no-op until PostHog has actually loaded (which only happens when a key
- * is configured, and only on idle). Nothing here imports posthog-js, so
- * the marketing bundle stays free of it.
+ * no-op until PostHog has actually loaded, which needs a configured key
+ * *and* the visitor's consent (see src/lib/consent.ts). Nothing here
+ * imports posthog-js, so the marketing bundle stays free of it.
  */
 
 export type AnalyticsEvent =
@@ -17,6 +17,13 @@ type Props = Record<string, string | number | boolean | undefined>;
 
 interface PostHogLike {
   capture: (event: string, properties?: Props) => void;
+  /**
+   * Withdrawing consent has to stop collection that is already running, not
+   * merely prevent the next visit's. Optional because this is a structural
+   * type over what posthog-js happens to expose, not a contract we own.
+   */
+  opt_out_capturing?: () => void;
+  reset?: (resetDeviceId?: boolean) => void;
 }
 
 declare global {

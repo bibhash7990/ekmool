@@ -23,13 +23,37 @@ The script fails the process on any gate breach, so it works unchanged as a CI s
 
 | Page | Perf | A11y | BP | SEO | JS | LCP | CLS | TBT |
 |---|---|---|---|---|---|---|---|---|
-| `/` | 99 | 100 | 100 | 100 | 166 KB | 2.1 s | 0 | 30 ms |
-| `/products` | 99 | 100 | 100 | 100 | 169 KB | 2.0 s | 0 | 30 ms |
-| `/products/lakadong-turmeric-powder` | 98 | 100 | 100 | 100 | 169 KB | 2.3 s | 0 | 30 ms |
-| `/blog/what-is-a-gi-tag` | 97 | 100 | 100 | 100 | 166 KB | 2.5 s | 0 | 30 ms |
+| `/` | 100 | 100 | 100 | 100 | 181 KB | 1.3 s | 0 | 40 ms |
+| `/products` | 95 | 100 | 100 | 100 | 185 KB | 3.0 s | 0 | 60 ms |
+| `/products/lakadong-turmeric-powder` | 95 | 100 | 100 | 100 | 185 KB | 2.9 s | 0 | 50 ms |
+| `/blog/what-is-a-gi-tag` | 96 | 100 | 100 | 100 | 181 KB | 2.8 s | 0 | 60 ms |
 
 Gates: SEO = 100, Performance ≥ 90, Accessibility ≥ 95, Best Practices ≥ 95,
-script transfer ≤ 170 KB, and zero off-origin requests. **All pass.**
+script transfer ≤ 190 KB, and zero off-origin requests. **All pass.**
+
+### The script budget moved once, in M11
+
+It was 170 KB from M6 to M10, and every page sat at 166–169 KB against it.
+The consent layer added **~15 KB transferred to every page** and the gate
+caught it, which is what it is for.
+
+The weight was traced rather than assumed: it is one chunk, 24.5 KB raw and
+9.9 KB over the wire, holding the banner, the footer control that withdraws
+consent, and the store they share. There is no accidental dependency in it —
+most of the size is the copy explaining what each cookie category actually
+does.
+
+Two things were tried and kept: the banner uses plain `<button>`/`<a>` rather
+than the shared `Button` and `next/link`, and the footer's grievance link is a
+plain `<a>` so Next does not prefetch the whole `/contact` route chunk when
+the footer scrolls into view. Neither recovered much, because neither was the
+cost.
+
+What was **not** done: shortening the banner's explanation. That prose is the
+part that makes the consent informed, and trading it for bytes would be
+optimising against the point of the feature. So the budget moved to 190 KB
+instead — thin headroom on purpose, because a generous budget catches
+nothing.
 
 CLS is 0 on every page, which is the point of reserving space for the variant
 picker and keeping the sticky add-to-cart bar below the fold.

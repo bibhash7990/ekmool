@@ -5,6 +5,7 @@ import { getSession } from "@/lib/session";
 import { Eyebrow } from "@/components/ui/Eyebrow";
 import { SoilLine } from "@/components/ui/SoilLine";
 import { TrackOrderForm } from "@/components/account/TrackOrderForm";
+import { turnstileSiteKey } from "@/lib/turnstile";
 
 export const dynamic = "force-dynamic";
 
@@ -56,7 +57,11 @@ export default async function TrackPage({
 
       <SoilLine align="left" className="my-10 max-w-xs" />
 
-      <TrackOrderForm initialReference={ref ?? ""} autoFocus={!ref} />
+      <TrackOrderForm
+        initialReference={ref ?? ""}
+        autoFocus={!ref}
+        turnstileSiteKey={turnstileSiteKey}
+      />
 
       <p className="mt-10 max-w-[52ch] text-15 text-ek-green-700">
         Lost the confirmation email? Check your spam folder first — then{" "}

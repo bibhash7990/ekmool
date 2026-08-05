@@ -117,10 +117,11 @@ All of these run against a live server and a live database, so start one first
 | `npm run test:checkout` | Idempotency, atomic stock, oversell, webhook signature, rate limiting |
 | `npm run test:account` | Order lookup, enumeration resistance, session scoping, cancellation, the account area |
 | `npm run test:commerce` | GST arithmetic and the split, invoice numbering, returns windows, re-order, prefill |
+| `npm run test:consent` | Security headers, that nothing tracks before consent, the grievance notice, the honeypot |
 | `npm run test:db-down` | Browsing with MySQL stopped (stop it first) |
 | `npm run test:jobs` | Cron authorisation, stale-order cancel, reminder dedupe |
 | `npm run validate:schema` | Titles, descriptions, canonicals, JSON-LD, internal links |
-| `npm run audit` | Lighthouse gates: SEO 100, Perf ≥90, A11y ≥95, BP ≥95, JS ≤170 KB |
+| `npm run audit` | Lighthouse gates: SEO 100, Perf ≥90, A11y ≥95, BP ≥95, JS ≤190 KB |
 | `npm run loadtest` | k6 browse + checkout load, verified against the database |
 | `npm run chaos` | Kills MySQL under live traffic and checks what survives |
 
@@ -192,6 +193,25 @@ All of these run against a live server and a live database, so start one first
 - **Invoice numbers are allocated on first render, not at checkout.** A
   cancelled order would otherwise burn a number, and a gap in a GST series is
   a question you do not want to answer.
+- **Consent is the load condition, not a filter.** `AnalyticsLoader` does not
+  reach `import("posthog-js")` until a yes has been recorded, so before a
+  decision there is no bundle, no request and no cookie — which is what
+  `npm run test:consent` asserts against the served bytes. A banner sitting
+  on top of a tracker that runs anyway is worse than no banner, because it
+  tells the visitor something they cannot check.
+- **There is no "marketing" toggle,** because there is no marketing tracking.
+  A switch that controls nothing is theatre and teaches people that these
+  switches are meaningless. Add the tool, add the category, bump
+  `CONSENT_VERSION`, and everyone gets asked again.
+- **No CSP nonce, deliberately.** A per-request nonce forces every page to be
+  dynamic, and static browsing is this site's entire load story. The origin
+  allowlist plus absolute `frame-ancestors`/`object-src`/`form-action` is the
+  better trade here; the reasoning is written out in `next.config.ts`.
+- **Erasure anonymises, it does not delete.** Orders are financial records
+  with a statutory retention period, so `eraseCustomer` overwrites every
+  column that could name someone and leaves the transaction. The UI says
+  exactly that before you confirm — telling someone their data is gone while
+  the row survives would be the actual violation.
 - **Parameterised SQL only**, secrets only via env.
 - **Never fabricate social proof.** There are no ratings, no review counts, and
   scarcity messaging appears only when the stock number is literally true. The

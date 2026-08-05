@@ -3,6 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
+import { HONEYPOT_FIELD, readHoneypot } from "@/lib/honeypot";
+import { HoneypotField } from "@/components/security/HoneypotField";
+import { TurnstileWidget } from "@/components/security/TurnstileWidget";
 
 type FieldErrors = Record<string, string>;
 
@@ -16,13 +19,17 @@ type FieldErrors = Record<string, string>;
 export function TrackOrderForm({
   initialReference = "",
   autoFocus = false,
+  turnstileSiteKey = "",
 }: {
   initialReference?: string;
   autoFocus?: boolean;
+  /** Empty unless Turnstile is configured, in which case nothing renders. */
+  turnstileSiteKey?: string;
 }) {
   const router = useRouter();
   const [reference, setReference] = useState(initialReference);
   const [email, setEmail] = useState("");
+  const [turnstileToken, setTurnstileToken] = useState("");
   const [errors, setErrors] = useState<FieldErrors>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -41,9 +48,13 @@ export function TrackOrderForm({
     });
   }
 
-  async function onSubmit(event: React.FormEvent) {
+  async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (submitting) return;
+
+    // Captured before the first await: React nulls currentTarget once the
+    // handler returns, and this is read after the fetch has begun.
+    const honeypot = readHoneypot(event.currentTarget);
 
     setErrors({});
     setSubmitError(null);
@@ -53,7 +64,12 @@ export function TrackOrderForm({
       const response = await fetch("/api/account/lookup", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ reference, email }),
+        body: JSON.stringify({
+          reference,
+          email,
+          turnstileToken,
+          [HONEYPOT_FIELD]: honeypot,
+        }),
       });
 
       const data: {
@@ -177,6 +193,16 @@ export function TrackOrderForm({
           </p>
         )}
       </div>
+
+      <HoneypotField />
+
+      {turnstileSiteKey && (
+        <TurnstileWidget
+          siteKey={turnstileSiteKey}
+          action="order-lookup"
+          onToken={setTurnstileToken}
+        />
+      )}
 
       <Button type="submit" size="lg" className="mt-8 w-full" disabled={submitting}>
         {submitting ? "Checking…" : "Find my order"}

@@ -12,6 +12,9 @@ import { buildOrderConfirmedEmail } from "@/emails/order-confirmed";
 import { sendAndLog } from "@/lib/mail";
 import { DbUnconfiguredError } from "@/db/pool";
 import { appUrl, hasRazorpay } from "@/lib/env";
+import { verifyChallenge } from "@/lib/turnstile";
+import { HONEYPOT_FIELD } from "@/lib/honeypot";
+import { clientIp } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -47,6 +50,24 @@ export async function POST(request: NextRequest) {
   } catch {
     return NextResponse.json(
       { error: "Malformed JSON body", code: "BAD_REQUEST" },
+      { status: 400 },
+    );
+  }
+
+  // Before validation, so a bot never learns which of its fields were
+  // wrong. The refusal is deliberately shaped like every other 400 here.
+  const envelope = (payload ?? {}) as Record<string, unknown>;
+  const challenge = await verifyChallenge({
+    honeypot: envelope[HONEYPOT_FIELD],
+    token: envelope.turnstileToken,
+    ip: clientIp(request.headers),
+  });
+  if (!challenge.ok) {
+    return NextResponse.json(
+      {
+        error: "We could not verify this request. Please reload and try again.",
+        code: "CHALLENGE_FAILED",
+      },
       { status: 400 },
     );
   }

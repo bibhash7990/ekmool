@@ -45,6 +45,19 @@ Generate the secrets:
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
+**Required before you invoice anyone**
+
+| Variable | Notes |
+|---|---|
+| `SELLER_LEGAL_NAME` · `SELLER_GSTIN` · `SELLER_STATE` · `SELLER_ADDRESS` | All four together, or none. They decide both whether GST is recorded on an order and whether the invoice is a tax invoice — one switch, because an unregistered seller may not collect tax (CGST Act s.32). Unset, no GST is charged and invoices print as pro-forma with no tax columns. `SELLER_STATE` must match a checkout state name exactly; it is what distinguishes CGST + SGST from IGST. |
+| `SELLER_FSSAI` | Optional. Printed when set. |
+
+Set these **before** taking orders you intend to invoice. They are
+snapshotted onto each order at checkout, so configuring them later does not
+backdate: earlier orders stay untaxed and their invoices stay pro-forma,
+which is correct, because no GST was collected on them. Details in
+[keys-needed.md](keys-needed.md#6-your-own-gst-registration--tax-invoices).
+
 **Optional** — each switches on one feature and is inert when absent:
 `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` + `CLERK_SECRET_KEY`,
 `NEXT_PUBLIC_RAZORPAY_KEY_ID` + `RAZORPAY_KEY_SECRET` + `RAZORPAY_WEBHOOK_SECRET`,

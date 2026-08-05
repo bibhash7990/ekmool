@@ -148,9 +148,18 @@ export async function updateOrderStatus(params: {
       return { changed: false, previous };
     }
 
+    // delivered_at is stamped once, on the transition in. It is what the
+    // returns window is measured from, so a re-save must not move it and a
+    // later status change must not clear it.
     await connection.execute<ResultSetHeader>(
-      `UPDATE orders SET status = ?, tracking_id = ? WHERE id = ?`,
-      [params.status, nextTracking, params.orderId],
+      `UPDATE orders
+          SET status = ?, tracking_id = ?,
+              delivered_at = CASE
+                WHEN ? = 'delivered' AND delivered_at IS NULL THEN NOW()
+                ELSE delivered_at
+              END
+        WHERE id = ?`,
+      [params.status, nextTracking, params.status, params.orderId],
     );
 
     await connection.execute<ResultSetHeader>(

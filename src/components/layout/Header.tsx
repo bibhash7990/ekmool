@@ -6,7 +6,10 @@ import { ACCOUNT_LINK, NAV_LINKS } from "@/lib/constants";
 
 export function Header() {
   return (
-    <header className="sticky top-0 z-40 border-b border-ek-green-200 bg-ek-paper/95 backdrop-blur-[2px]">
+    <header
+      data-site-chrome
+      className="sticky top-0 z-40 border-b border-ek-green-200 bg-ek-paper/95 backdrop-blur-[2px]"
+    >
       <div className="mx-auto flex max-w-[1180px] items-center justify-between gap-6 px-5 py-3 lg:px-8">
         <div className="flex items-center gap-2">
           <MobileNav />

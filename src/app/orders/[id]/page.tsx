@@ -3,6 +3,11 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 
 import { getOrderById, getOrderTimeline } from "@/db/queries/orders";
+import {
+  getReturnForOrder,
+  isReturnWindowOpen,
+  RETURN_REASONS,
+} from "@/db/queries/returns";
 import { getSession } from "@/lib/session";
 import { formatPaise } from "@/lib/money";
 import { Eyebrow } from "@/components/ui/Eyebrow";
@@ -10,6 +15,8 @@ import { SoilLine } from "@/components/ui/SoilLine";
 import { ButtonLink } from "@/components/ui/Button";
 import { OrderTimeline } from "@/components/account/OrderTimeline";
 import { CancelOrderButton } from "@/components/account/CancelOrderButton";
+import { ReturnRequestForm } from "@/components/account/ReturnRequestForm";
+import { ReorderButton } from "@/components/account/ReorderButton";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +41,14 @@ const PAYMENT_STATUS_LABEL: Record<string, string> = {
   refunded: "Refunded",
 };
 
+const RETURN_STATUS_LABEL: Record<string, string> = {
+  requested: "We have your request and will reply shortly.",
+  approved: "Approved — we will be in touch with what happens next.",
+  rejected: "We could not accept this one.",
+  received: "Your return has reached us.",
+  refunded: "Refunded.",
+};
+
 /**
  * The order page proper — status, history, items, address, and what the
  * customer can still do about it.
@@ -54,13 +69,28 @@ export default async function OrderPage({
   const [order, session] = await Promise.all([getOrderById(id), getSession()]);
   if (!order) notFound();
 
-  const history = await getOrderTimeline(id);
+  const [history, existingReturn] = await Promise.all([
+    getOrderTimeline(id),
+    getReturnForOrder(id),
+  ]);
 
   const shortId = order.id.slice(-8).toUpperCase();
   const isOwner = session?.email === order.customerEmail.toLowerCase();
   const isCod = order.paymentMethod === "cod";
   const prepaid = order.paymentStatus === "paid";
   const canCancel = CANCELLABLE.has(order.status) && !prepaid;
+
+  // Delivered, inside the longest window, nothing open yet. The per-reason
+  // windows are enforced in createReturnRequest; this only decides whether
+  // to offer the form, so a month-old order is not asked about.
+  const canRequestReturn =
+    order.status === "delivered" &&
+    !existingReturn &&
+    isReturnWindowOpen(order.deliveredAt);
+
+  // An invoice exists for anything actually supplied. A pending order has
+  // been paid for by nobody yet, and a cancelled one supplied nothing.
+  const hasInvoice = order.status !== "pending" && order.status !== "cancelled";
 
   return (
     <div className="mx-auto max-w-[900px] px-5 py-12 lg:py-16">
@@ -235,7 +265,7 @@ export default async function OrderPage({
             </Link>{" "}
             and we will cancel and refund it for you.
           </p>
-        ) : (
+        ) : order.status === "delivered" ? null : (
           <p className="max-w-[54ch] text-17 text-ek-green-700">
             This order has already been packed, so it can no longer be
             cancelled here.{" "}
@@ -246,8 +276,64 @@ export default async function OrderPage({
           </p>
         )}
 
+        {existingReturn && (
+          <div className="max-w-[54ch] border border-ek-green-200 bg-ek-gold-100/40 px-5 py-4">
+            <p className="text-17 text-ek-green-900">
+              Return requested{" "}
+              {RETURN_REASONS.find((r) => r.value === existingReturn.reason)
+                ?.label.toLowerCase() ?? existingReturn.reason}
+            </p>
+            <p className="mt-1.5 text-15 text-ek-green-700">
+              {RETURN_STATUS_LABEL[existingReturn.status] ??
+                existingReturn.status}
+            </p>
+            {existingReturn.resolution && (
+              <p className="mt-2 text-15 text-ek-green-900">
+                {existingReturn.resolution}
+              </p>
+            )}
+          </div>
+        )}
+
+        {canRequestReturn &&
+          (isOwner ? (
+            <div className="mt-2">
+              <ReturnRequestForm
+                orderId={order.id}
+                reasons={RETURN_REASONS.map((reason) => ({
+                  value: reason.value,
+                  label: reason.label,
+                  windowHours: reason.windowHours,
+                  help: reason.help,
+                }))}
+              />
+            </div>
+          ) : (
+            <p className="max-w-[54ch] text-17 text-ek-green-700">
+              Something wrong with this order?{" "}
+              <Link
+                href={`/track?ref=${shortId}`}
+                className="link-draw text-ek-green-900"
+              >
+                Confirm it is yours
+              </Link>{" "}
+              and you can tell us here.
+            </p>
+          ))}
+
         <div className="mt-10 flex flex-wrap items-center gap-6">
-          <ButtonLink href="/products">Continue shopping</ButtonLink>
+          <ReorderButton orderId={order.id} />
+          {hasInvoice && (
+            <Link
+              href={`/orders/${order.id}/invoice`}
+              className="link-draw text-17 text-ek-green-900"
+            >
+              View invoice
+            </Link>
+          )}
+          <ButtonLink href="/products" variant="ghost">
+            Continue shopping
+          </ButtonLink>
           {!session && (
             <Link href="/track" className="link-draw text-17 text-ek-green-900">
               See all your orders

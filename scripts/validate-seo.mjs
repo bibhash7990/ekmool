@@ -2,15 +2,19 @@
  * SEO + structured-data gate. Crawls the running site and fails the
  * process on any violation, so it can be wired into CI.
  *
- *   npm run validate:schema            (expects a server on :3000)
- *   npm run validate:schema -- 3100    (or pass a port)
+ *   npm run validate:schema            (expects a server on :3100)
+ *   npm run validate:schema -- 3000    (or pass a port)
  *
  * Checks per page: exactly one <h1>, no skipped heading levels, title
  * length, description length, canonical present, every JSON-LD block
  * parses, and the expected @types are present.
  */
 
-const port = process.argv[2] ?? process.env.PORT ?? "3000";
+// 3100, to match every other script here. This used to default to 3000,
+// which is where the Docker container publishes — so running it with no
+// argument silently validated whatever image happened to be up rather than
+// the build just made, and passed while doing it.
+const port = process.argv[2] ?? process.env.PORT ?? "3100";
 const base = `http://localhost:${port}`;
 
 const PAGES = [

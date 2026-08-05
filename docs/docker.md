@@ -182,8 +182,11 @@ The same compose file runs on a server. On the target host:
 
 1. Install Docker, clone the repository.
 2. Write `.env` with production values — a real `NEXT_PUBLIC_APP_URL`, strong
-   `CRON_SECRET` and `REVALIDATE_SECRET`, real database credentials, and
-   whichever service keys you have.
+   `CRON_SECRET`, `REVALIDATE_SECRET` and `SESSION_SECRET`, real database
+   credentials, your `SELLER_*` identity if you are GST-registered, and
+   whichever service keys you have. Without `SESSION_SECRET` every container
+   restart signs every customer out; without the seller identity invoices
+   print as pro-forma. Both are covered in [deploy.md](deploy.md).
 3. **Remove the `ports` block from `mysql`.** Nothing outside the compose
    network should reach the database. It is published only so local tooling
    works.

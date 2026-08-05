@@ -116,6 +116,7 @@ All of these run against a live server and a live database, so start one first
 |---|---|
 | `npm run test:checkout` | Idempotency, atomic stock, oversell, webhook signature, rate limiting |
 | `npm run test:account` | Order lookup, enumeration resistance, session scoping, cancellation, the account area |
+| `npm run test:commerce` | GST arithmetic and the split, invoice numbering, returns windows, re-order, prefill |
 | `npm run test:db-down` | Browsing with MySQL stopped (stop it first) |
 | `npm run test:jobs` | Cron authorisation, stale-order cancel, reminder dedupe |
 | `npm run validate:schema` | Titles, descriptions, canonicals, JSON-LD, internal links |
@@ -176,6 +177,24 @@ All of these run against a live server and a live database, so start one first
   Next bundles each route separately, so a plain module constant is a
   different value in `/api/account/lookup` than in `/track` — a cookie signed
   by one then fails to verify in the other.
+- **GST is one switch, not two.** A complete seller identity
+  (`SELLER_LEGAL_NAME` + `SELLER_GSTIN` + `SELLER_STATE` + `SELLER_ADDRESS`)
+  decides *both* whether tax is recorded on an order and whether the invoice
+  is a tax invoice — because s.32 of the CGST Act forbids an unregistered
+  person from collecting tax, so there is no state in which one is true and
+  the other is not. Splitting them produced a pro-forma that read "no GST
+  registration is configured" above a printed CGST/SGST breakdown. Every tax
+  figure is **snapshotted onto the order at checkout**, so configuring a
+  registration later never backdates an earlier invoice.
+- **Tax comes out of the price, never on top,** and the tax is the remainder
+  after the taxable value, never rounded independently — that is what makes
+  an invoice reconcile to `total_paise` exactly. See `src/lib/gst.ts`.
+- **Invoice numbers are allocated on first render, not at checkout.** A
+  cancelled order would otherwise burn a number, and a gap in a GST series is
+  a question you do not want to answer.
 - **Parameterised SQL only**, secrets only via env.
 - **Never fabricate social proof.** There are no ratings, no review counts, and
-  scarcity messaging appears only when the stock number is literally true.
+  scarcity messaging appears only when the stock number is literally true. The
+  same rule covers a GSTIN: there is no placeholder anywhere, and the one in
+  `scripts/test-commerce.mjs` is a fixture that a spawned test server reads —
+  it never reaches a config file or a rendered document.

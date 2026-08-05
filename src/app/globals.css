@@ -204,3 +204,44 @@
     animation: none;
   }
 }
+
+/* ------------------------------------------------------------------
+   Print.
+
+   Only one page is meant to be printed — the invoice — but these rules
+   are global because a customer printing an order page or a policy
+   should not get the navigation and the dark footer with it.
+
+   [data-site-chrome] marks the site header and footer specifically. An
+   element selector would also hit the <header> and <footer> inside the
+   invoice itself, which are the parts that most need to print.
+   ------------------------------------------------------------------ */
+@media print {
+  [data-site-chrome],
+  .print\:hidden {
+    display: none !important;
+  }
+
+  html,
+  body {
+    background: #fff;
+    /* Ink is expensive and a background tint prints as grey mush. */
+    color: #000;
+  }
+
+  a {
+    text-decoration: none;
+    color: inherit;
+  }
+
+  /* Keep a table row together across a page break. */
+  tr,
+  address,
+  dl {
+    break-inside: avoid;
+  }
+
+  @page {
+    margin: 14mm;
+  }
+}

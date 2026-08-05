@@ -78,3 +78,61 @@ export const hasPosthog: boolean = looksReal(
   str(process.env.NEXT_PUBLIC_POSTHOG_KEY),
   "phc_",
 );
+
+/* ---------- Seller identity (tax invoices) ---------- */
+
+/**
+ * Who is selling, legally. Absent, the site still sells — invoices simply
+ * come out headed **pro-forma, not a tax invoice**, which is honest.
+ * Printing a made-up GSTIN on a document a customer may hand to their own
+ * accountant is not an option, so there is no placeholder anywhere.
+ */
+export interface SellerIdentity {
+  legalName: string;
+  gstin: string;
+  /** Decides CGST + SGST versus IGST. Must match a name in INDIAN_STATE_OPTIONS. */
+  state: string;
+  address: string;
+  fssai: string;
+}
+
+export function getSellerIdentity(): SellerIdentity | null {
+  const legalName = str(process.env.SELLER_LEGAL_NAME);
+  const gstin = str(process.env.SELLER_GSTIN).toUpperCase();
+  const state = str(process.env.SELLER_STATE);
+  const address = str(process.env.SELLER_ADDRESS);
+
+  // A GSTIN is 15 characters: 2 state code, 10 PAN, 1 entity, 1 'Z', 1
+  // checksum. Anything else is a typo or a placeholder, and either way it
+  // must not reach a document.
+  const gstinLooksReal =
+    /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]Z[0-9A-Z]$/.test(gstin);
+
+  if (!legalName || !state || !address || !gstinLooksReal) return null;
+
+  return {
+    legalName,
+    gstin,
+    state,
+    address,
+    fssai: str(process.env.SELLER_FSSAI),
+  };
+}
+
+/** Only a configured, well-formed seller identity makes a document a tax invoice. */
+export const hasSellerIdentity: boolean = getSellerIdentity() !== null;
+
+/**
+ * The seller's state for the CGST+SGST versus IGST decision — and null
+ * unless the *whole* identity is present.
+ *
+ * This deliberately does not read SELLER_STATE on its own. Section 32 of the
+ * CGST Act is unambiguous: a person who is not registered shall not collect
+ * tax. So a shop without a GSTIN charges no GST, and an order placed by one
+ * must record none — not a split computed from a state that happens to be
+ * configured. Deriving both the storage and the document from one switch is
+ * what keeps them from contradicting each other, which is a real defect this
+ * had: a pro-forma reading "no GST registration is configured" while
+ * printing a CGST and SGST breakdown underneath.
+ */
+export const sellerState: string | null = getSellerIdentity()?.state ?? null;

@@ -4,6 +4,13 @@ import type { PoolConnection, ResultSetHeader, RowDataPacket } from "mysql2/prom
 import { getPool } from "@/db/pool";
 import { upsertCustomerTx } from "@/db/queries/customers";
 import { timingSafeEquals } from "@/lib/crypto";
+import { sellerState } from "@/lib/env";
+import {
+  supplyKind,
+  taxFromInclusive,
+  financialYear,
+  formatInvoiceNumber,
+} from "@/lib/gst";
 import type { CheckoutInput } from "@/lib/validation/checkout";
 import {
   FLAT_SHIPPING_PAISE,
@@ -21,6 +28,13 @@ export interface OrderItem {
   unitPricePaise: number;
   qty: number;
   lineTotalPaise: number;
+  /** Frozen at the time of supply — see 003_gst_invoicing.sql. */
+  hsnCode: string | null;
+  gstRateBps: number;
+  taxableValuePaise: number;
+  cgstPaise: number;
+  sgstPaise: number;
+  igstPaise: number;
 }
 
 export interface Order {
@@ -45,6 +59,11 @@ export interface Order {
   status: OrderStatus;
   trackingId: string | null;
   createdAt: Date;
+  placeOfSupply: string | null;
+  sellerState: string | null;
+  invoiceNumber: string | null;
+  invoiceDate: Date | null;
+  deliveredAt: Date | null;
   items: OrderItem[];
 }
 
@@ -76,6 +95,8 @@ interface VariantPriceRow extends RowDataPacket {
   price_inr: number;
   product_slug: string;
   product_name: string;
+  hsn_code: string | null;
+  gst_rate_bps: number;
 }
 
 /**
@@ -102,7 +123,8 @@ export async function createOrder(input: {
 
     const [variantRows] = await connection.query<VariantPriceRow[]>(
       `SELECT v.id, v.sku, v.pack_size_label, v.price_inr,
-              p.slug AS product_slug, p.name AS product_name
+              p.slug AS product_slug, p.name AS product_name,
+              p.hsn_code, p.gst_rate_bps
          FROM product_variants v
          JOIN products p ON p.id = v.product_id
         WHERE v.id IN (${placeholders})
@@ -114,7 +136,18 @@ export async function createOrder(input: {
 
     const byId = new Map(variantRows.map((row) => [row.id, row]));
 
+    const orderId = ulid();
+    const { customer, address, paymentMethod, notes } = input.checkout;
+
+    // Place of supply is the delivery state; the seller's state comes from
+    // the environment as it stands right now. Both are frozen onto the
+    // order, because a registration can move and old invoices must not.
+    const placeOfSupply = address.state;
+    const kind = supplyKind(sellerState, placeOfSupply);
+
     const items: OrderItem[] = [];
+    const variantIdByIndex: (number | null)[] = [];
+
     for (const requested of input.checkout.items) {
       const variant = byId.get(requested.variantId);
       if (!variant) throw new UnknownVariantError(requested.variantId);
@@ -139,6 +172,11 @@ export async function createOrder(input: {
         );
       }
 
+      const lineTotalPaise = variant.price_inr * requested.qty;
+      // Prices include GST, so the tax comes out of this figure rather
+      // than being added to it. See src/lib/gst.ts.
+      const tax = taxFromInclusive(lineTotalPaise, variant.gst_rate_bps, kind);
+
       items.push({
         sku: variant.sku,
         productSlug: variant.product_slug,
@@ -146,16 +184,24 @@ export async function createOrder(input: {
         packSizeLabel: variant.pack_size_label,
         unitPricePaise: variant.price_inr,
         qty: requested.qty,
-        lineTotalPaise: variant.price_inr * requested.qty,
+        lineTotalPaise,
+        hsnCode: variant.hsn_code,
+        // tax.rateBps, not variant.gst_rate_bps: the rate that was applied,
+        // not the one the catalogue would have charged. An unregistered shop
+        // applies none, and the snapshot has to say so or the line reads
+        // "5% GST" beside a tax figure of nothing.
+        gstRateBps: tax.rateBps,
+        taxableValuePaise: tax.taxablePaise,
+        cgstPaise: tax.cgstPaise,
+        sgstPaise: tax.sgstPaise,
+        igstPaise: tax.igstPaise,
       });
+      variantIdByIndex.push(requested.variantId);
     }
 
     const subtotalPaise = items.reduce((sum, i) => sum + i.lineTotalPaise, 0);
     const shippingPaise = shippingFor(subtotalPaise);
     const totalPaise = subtotalPaise + shippingPaise;
-
-    const orderId = ulid();
-    const { customer, address, paymentMethod, notes } = input.checkout;
 
     // COD is confirmed on placement; online payment waits for the webhook.
     const status: OrderStatus = paymentMethod === "cod" ? "confirmed" : "pending";
@@ -171,8 +217,8 @@ export async function createOrder(input: {
           customer_phone, address_line1, address_line2, address_city,
           address_state, address_pincode, address_landmark, payment_method,
           payment_status, subtotal_paise, shipping_paise, total_paise,
-          status, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)`,
+          status, notes, place_of_supply, seller_state)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?)`,
       [
         orderId,
         customerId,
@@ -192,20 +238,22 @@ export async function createOrder(input: {
         totalPaise,
         status,
         notes || null,
+        placeOfSupply,
+        sellerState,
       ],
     );
 
-    for (const item of items) {
+    for (const [index, item] of items.entries()) {
       await connection.execute<ResultSetHeader>(
         `INSERT INTO order_items
            (order_id, variant_id, sku, product_slug, product_name,
-            pack_size_label, unit_price_paise, qty, line_total_paise)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            pack_size_label, unit_price_paise, qty, line_total_paise,
+            hsn_code, gst_rate_bps, taxable_value_paise,
+            cgst_paise, sgst_paise, igst_paise)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           orderId,
-          input.checkout.items.find(
-            (i) => byId.get(i.variantId)?.sku === item.sku,
-          )?.variantId ?? null,
+          variantIdByIndex[index],
           item.sku,
           item.productSlug,
           item.productName,
@@ -213,6 +261,12 @@ export async function createOrder(input: {
           item.unitPricePaise,
           item.qty,
           item.lineTotalPaise,
+          item.hsnCode,
+          item.gstRateBps,
+          item.taxableValuePaise,
+          item.cgstPaise,
+          item.sgstPaise,
+          item.igstPaise,
         ],
       );
     }
@@ -243,6 +297,11 @@ export async function createOrder(input: {
       status,
       trackingId: null,
       createdAt: new Date(),
+      placeOfSupply,
+      sellerState,
+      invoiceNumber: null,
+      invoiceDate: null,
+      deliveredAt: null,
       items,
     };
   } catch (error) {
@@ -288,6 +347,11 @@ interface OrderRow extends RowDataPacket {
   status: OrderStatus;
   tracking_id: string | null;
   created_at: Date;
+  place_of_supply: string | null;
+  seller_state: string | null;
+  invoice_number: string | null;
+  invoice_date: Date | null;
+  delivered_at: Date | null;
 }
 
 interface OrderItemRow extends RowDataPacket {
@@ -298,6 +362,12 @@ interface OrderItemRow extends RowDataPacket {
   unit_price_paise: number;
   qty: number;
   line_total_paise: number;
+  hsn_code: string | null;
+  gst_rate_bps: number;
+  taxable_value_paise: number;
+  cgst_paise: number;
+  sgst_paise: number;
+  igst_paise: number;
 }
 
 export async function getOrderById(id: string): Promise<Order | null> {
@@ -311,7 +381,9 @@ export async function getOrderById(id: string): Promise<Order | null> {
 
   const [itemRows] = await pool.execute<OrderItemRow[]>(
     `SELECT sku, product_slug, product_name, pack_size_label,
-            unit_price_paise, qty, line_total_paise
+            unit_price_paise, qty, line_total_paise, hsn_code,
+            gst_rate_bps, taxable_value_paise,
+            cgst_paise, sgst_paise, igst_paise
        FROM order_items WHERE order_id = ? ORDER BY id`,
     [id],
   );
@@ -338,6 +410,11 @@ export async function getOrderById(id: string): Promise<Order | null> {
     status: row.status,
     trackingId: row.tracking_id,
     createdAt: row.created_at,
+    placeOfSupply: row.place_of_supply,
+    sellerState: row.seller_state,
+    invoiceNumber: row.invoice_number,
+    invoiceDate: row.invoice_date,
+    deliveredAt: row.delivered_at,
     items: itemRows.map((i) => ({
       sku: i.sku,
       productSlug: i.product_slug,
@@ -346,8 +423,99 @@ export async function getOrderById(id: string): Promise<Order | null> {
       unitPricePaise: i.unit_price_paise,
       qty: i.qty,
       lineTotalPaise: i.line_total_paise,
+      hsnCode: i.hsn_code,
+      gstRateBps: i.gst_rate_bps,
+      taxableValuePaise: i.taxable_value_paise,
+      cgstPaise: i.cgst_paise,
+      sgstPaise: i.sgst_paise,
+      igstPaise: i.igst_paise,
     })),
   };
+}
+
+/**
+ * Allocates this order's invoice number, or returns the one it already has.
+ *
+ * Allocation is lazy — the first time an invoice is actually rendered —
+ * because a number burned on an order that is later cancelled leaves a hole
+ * in a series that GST requires to be consecutive.
+ *
+ * SELECT ... FOR UPDATE on the counter row serialises concurrent
+ * allocations within a financial year. Two customers printing invoices at
+ * the same instant get consecutive numbers, never the same one, and the
+ * unique index on orders.invoice_number is the backstop if that reasoning
+ * is ever wrong.
+ */
+export async function allocateInvoiceNumber(
+  orderId: string,
+  now = new Date(),
+): Promise<{ invoiceNumber: string; invoiceDate: Date } | null> {
+  const pool = getPool();
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const [existing] = await connection.execute<RowDataPacket[]>(
+      `SELECT invoice_number, invoice_date, status FROM orders
+        WHERE id = ? FOR UPDATE`,
+      [orderId],
+    );
+    const order = existing[0];
+    if (!order) {
+      await connection.rollback();
+      return null;
+    }
+
+    if (order.invoice_number) {
+      await connection.rollback();
+      return {
+        invoiceNumber: order.invoice_number as string,
+        invoiceDate: order.invoice_date as Date,
+      };
+    }
+
+    // Nothing was supplied, so nothing is invoiced.
+    if (order.status === "cancelled" || order.status === "pending") {
+      await connection.rollback();
+      return null;
+    }
+
+    const fy = financialYear(now);
+
+    await connection.execute<ResultSetHeader>(
+      `INSERT INTO invoice_counters (fy, last_seq) VALUES (?, 0)
+       ON DUPLICATE KEY UPDATE fy = fy`,
+      [fy],
+    );
+
+    const [counter] = await connection.execute<RowDataPacket[]>(
+      `SELECT last_seq FROM invoice_counters WHERE fy = ? FOR UPDATE`,
+      [fy],
+    );
+    const sequence = Number(counter[0].last_seq) + 1;
+
+    await connection.execute<ResultSetHeader>(
+      `UPDATE invoice_counters SET last_seq = ? WHERE fy = ?`,
+      [sequence, fy],
+    );
+
+    const invoiceNumber = formatInvoiceNumber(fy, sequence);
+    const invoiceDate = now;
+
+    await connection.execute<ResultSetHeader>(
+      `UPDATE orders SET invoice_number = ?, invoice_date = ? WHERE id = ?`,
+      [invoiceNumber, invoiceDate, orderId],
+    );
+
+    await connection.commit();
+    return { invoiceNumber, invoiceDate };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 }
 
 export async function getOrderByIdempotencyKey(

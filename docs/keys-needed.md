@@ -20,6 +20,7 @@ Nothing here is urgent. Do them in the order that matches what you need next.
 | Order confirmation page | working |
 | **Order tracking, history, cancellation** | working — `/track`, no auth provider involved |
 | **Customer account** — orders, profile, saved addresses | working — `/account`, same session, no Clerk |
+| **Invoices, returns, re-order** | working — invoices print pro-forma until section 6 is filled in |
 | Background jobs | working |
 | Emails | composed and recorded in `email_log` as `skipped_no_smtp`, not delivered |
 
@@ -203,6 +204,57 @@ NEXT_PUBLIC_POSTHOG_KEY=phc_xxxxxxxxxxxx
 Requests are proxied through `/ingest` on your own domain, so ad-blockers do
 not silently drop your analytics. Session recording is off by default and we
 recommend leaving it that way for a checkout flow.
+
+---
+
+## 6. Your own GST registration — tax invoices
+
+Not a signup with anyone here, but it belongs in this list because it is the
+last thing standing between the invoice page and a document your customer's
+accountant will accept.
+
+```
+SELLER_LEGAL_NAME=Ekmool Foods Private Limited
+SELLER_GSTIN=29ABCDE1234F1Z5
+SELLER_STATE=Karnataka
+SELLER_ADDRESS=12 MG Road, Bengaluru, Karnataka 560001
+SELLER_FSSAI=10012345678901
+```
+
+**All four of the first four, or none of them.** They are a single switch
+that decides two things at once: whether GST is recorded against an order,
+and whether `/orders/<id>/invoice` is a tax invoice.
+
+That is one switch rather than two because s.32 of the CGST Act forbids an
+unregistered person from collecting tax. Without a registration your shop
+charges no GST, so there is no split to record and nothing to print — and a
+document headed *"not registered"* that showed a CGST/SGST breakdown anyway
+would be describing a transaction that never happened.
+
+`SELLER_STATE` must match a state name in the checkout dropdown exactly: it
+is what distinguishes CGST + SGST (buyer in your state) from IGST (buyer
+elsewhere). `SELLER_FSSAI` is optional and printed only when present.
+
+Leave the identity unset and the invoice prints headed **pro-forma — not a
+tax invoice**, with no tax columns at all. It still reconciles to the paise,
+so it is a perfectly good receipt in the meantime. Nothing here will invent a
+GSTIN to fill the gap.
+
+**Setting it later does not backdate.** Orders placed while you were
+unregistered stay untaxed, and their invoices stay pro-forma. That is the
+correct outcome — no GST was collected on them — and it is why the split is
+snapshotted onto each order at checkout rather than computed at print time.
+
+Invoice numbers are allocated **lazily**, the first time an invoice is
+actually rendered — never at checkout, because a cancelled order would burn a
+number and a gap in a GST series is a question you do not want to answer. The
+series is `EK/<financial year>/<six digits>`, consecutive within each Indian
+FY (1 April – 31 March), allocated under `SELECT ... FOR UPDATE`.
+
+> **Rates and HSN codes are seeded at 5% in migration 003 as a starting
+> point, not as settled fact.** Confirm both with your CA before you issue a
+> real tax invoice. This project does the arithmetic; it does not give tax
+> advice.
 
 ---
 

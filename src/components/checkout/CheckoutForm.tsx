@@ -110,6 +110,60 @@ export function CheckoutForm({
     if (submitError) errorRef.current?.focus();
   }, [submitError]);
 
+  /**
+   * Prefill from the signed-in customer's saved default address.
+   *
+   * Fetched rather than rendered in: /checkout is statically generated, and
+   * reading a cookie during its render would turn every checkout view into
+   * an origin request. The endpoint answers `{ address: null }` with no
+   * database work when there is no session, so a guest pays almost nothing
+   * for it and the guest flow is otherwise untouched.
+   *
+   * Only fills fields that are still empty — it can never overwrite
+   * something already typed.
+   */
+  const [prefilled, setPrefilled] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+
+    void fetch("/api/account/default-address")
+      .then((response) => (response.ok ? response.json() : null))
+      .then(
+        (
+          data: {
+            address?: Record<string, string>;
+            customer?: Record<string, string>;
+          } | null,
+        ) => {
+          if (cancelled || !data?.address) return;
+          setForm((current) => {
+            const next = { ...current };
+            const fill = (field: keyof typeof EMPTY_FORM, value?: string) => {
+              if (!next[field] && value) next[field] = value;
+            };
+            fill("name", data.customer?.name);
+            fill("email", data.customer?.email);
+            fill("phone", data.customer?.phone);
+            fill("line1", data.address?.line1);
+            fill("line2", data.address?.line2);
+            fill("city", data.address?.city);
+            fill("state", data.address?.state);
+            fill("pincode", data.address?.pincode);
+            fill("landmark", data.address?.landmark);
+            return next;
+          });
+          setPrefilled(true);
+        },
+      )
+      .catch(() => {
+        // Prefill is a convenience; a failure is not worth telling anyone.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   function update(field: keyof typeof EMPTY_FORM, value: string) {
     setForm((f) => ({ ...f, [field]: value }));
     setErrors((e) => {
@@ -312,6 +366,16 @@ export function CheckoutForm({
             >
               {submitError}
             </div>
+          )}
+
+          {prefilled && (
+            <p
+              role="status"
+              className="mb-6 border-l-2 border-ek-gold-500 bg-ek-gold-100/50 px-5 py-3 text-15 text-ek-green-900"
+            >
+              Filled in from your saved details. Change anything that has
+              moved — it will not affect the address on file.
+            </p>
           )}
 
           <fieldset className="border-0 p-0">

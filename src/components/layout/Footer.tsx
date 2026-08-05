@@ -15,7 +15,10 @@ export function Footer() {
   const year = new Date().getFullYear();
 
   return (
-    <footer className="grain-dark mt-auto bg-ek-green-950 text-ek-cream">
+    <footer
+      data-site-chrome
+      className="grain-dark mt-auto bg-ek-green-950 text-ek-cream"
+    >
       <div className="mx-auto max-w-[1180px] px-5 py-16 lg:px-8 lg:py-20">
         <div className="grid gap-12 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
           <div>

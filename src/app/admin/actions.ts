@@ -9,10 +9,12 @@ import {
   isOrderStatus,
 } from "@/db/queries/admin";
 import { getOrderById } from "@/db/queries/orders";
+import { moderateReview } from "@/db/queries/reviews";
+import { createCoupon, setCouponActive } from "@/db/queries/coupons";
 import { buildOrderShippedEmail } from "@/emails/order-shipped";
 import { notifyBackInStock } from "@/lib/back-in-stock";
 import { sendAndLog } from "@/lib/mail";
-import { revalidateCatalog } from "@/lib/revalidate";
+import { revalidateCatalog, revalidateReviews } from "@/lib/revalidate";
 import { appUrl } from "@/lib/env";
 
 export interface ActionResult {
@@ -153,5 +155,176 @@ export async function updateStockAction(
   } catch (error) {
     console.error("[admin] stock update failed:", error);
     return { ok: false, message: "Could not update stock. Try again." };
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Reviews                                                             */
+
+const moderationSchema = z.object({
+  id: z.coerce.number().int().positive(),
+  status: z.enum(["published", "rejected"]),
+  note: z.string().trim().max(500).optional().or(z.literal("")),
+});
+
+/**
+ * Publishing or rejecting a review.
+ *
+ * revalidateReviews() and not revalidateCatalog(): the two are separate
+ * tags precisely so moderating a review does not purge the catalogue cache
+ * and send every product page back to the database. And neither of them
+ * touches revalidatePath for /products/[slug] — see src/lib/revalidate.ts
+ * for why that would 404 the page permanently.
+ */
+export async function moderateReviewAction(
+  _previous: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  await requireAdmin();
+
+  const parsed = moderationSchema.safeParse({
+    id: formData.get("id"),
+    status: formData.get("status"),
+    note: formData.get("note"),
+  });
+
+  if (!parsed.success) {
+    return { ok: false, message: "Could not read that decision." };
+  }
+
+  try {
+    const changed = await moderateReview(
+      parsed.data.id,
+      parsed.data.status,
+      parsed.data.note || null,
+    );
+    if (!changed) return { ok: false, message: "Review not found." };
+
+    revalidateReviews();
+    revalidatePath("/admin/reviews");
+
+    return {
+      ok: true,
+      message:
+        parsed.data.status === "published"
+          ? "Published. It is on the product page within the hour, or immediately on the next request."
+          : "Rejected. It stays on record and is not shown anywhere.",
+    };
+  } catch (error) {
+    console.error("[admin] review moderation failed:", error);
+    return { ok: false, message: "Could not save that. Try again." };
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Coupons                                                             */
+
+/**
+ * Rupees in the form, paise in the database. The owner types 150, not
+ * 15000 — asking a human to think in paise is how a coupon ends up a
+ * hundred times too generous.
+ */
+const couponSchema = z
+  .object({
+    code: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .regex(/^[A-Z0-9-]{3,40}$/, "Letters, digits and hyphens only"),
+    description: z.string().trim().min(3, "Say what it does").max(160),
+    kind: z.enum(["percent", "flat", "free_shipping"]),
+    percent: z.coerce.number().min(0).max(90).optional(),
+    amountRupees: z.coerce.number().int().min(0).max(100000).optional(),
+    maxDiscountRupees: z.coerce.number().int().min(0).max(100000).optional(),
+    minSubtotalRupees: z.coerce.number().int().min(0).max(1000000).optional(),
+    endsAt: z.string().trim().optional().or(z.literal("")),
+    globalLimit: z.coerce.number().int().min(0).max(1000000).optional(),
+    perCustomerLimit: z.coerce.number().int().min(1).max(100).optional(),
+  })
+  .refine(
+    (value) => value.kind !== "percent" || (value.percent ?? 0) > 0,
+    { message: "A percentage coupon needs a percentage", path: ["percent"] },
+  )
+  .refine(
+    (value) => value.kind !== "flat" || (value.amountRupees ?? 0) > 0,
+    { message: "A flat coupon needs an amount", path: ["amountRupees"] },
+  );
+
+export async function createCouponAction(
+  _previous: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  await requireAdmin();
+
+  const parsed = couponSchema.safeParse(
+    Object.fromEntries(formData.entries()),
+  );
+  if (!parsed.success) {
+    return {
+      ok: false,
+      message: parsed.error.issues[0]?.message ?? "Check the fields.",
+    };
+  }
+
+  const input = parsed.data;
+
+  try {
+    await createCoupon({
+      code: input.code,
+      description: input.description,
+      kind: input.kind,
+      percentBps:
+        input.kind === "percent" ? Math.round((input.percent ?? 0) * 100) : null,
+      amountPaise:
+        input.kind === "flat" ? (input.amountRupees ?? 0) * 100 : null,
+      maxDiscountPaise: input.maxDiscountRupees
+        ? input.maxDiscountRupees * 100
+        : null,
+      minSubtotalPaise: (input.minSubtotalRupees ?? 0) * 100,
+      // A date with no time means end of that day, not the stroke of
+      // midnight at its start — otherwise "ends 31 March" would already
+      // have ended for the whole of the 31st.
+      endsAt: input.endsAt ? new Date(`${input.endsAt}T23:59:59`) : null,
+      globalLimit: input.globalLimit ? input.globalLimit : null,
+      perCustomerLimit: input.perCustomerLimit ?? 1,
+    });
+
+    revalidatePath("/admin/coupons");
+    return { ok: true, message: `${input.code} created and live.` };
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ER_DUP_ENTRY") {
+      return { ok: false, message: `${input.code} already exists.` };
+    }
+    console.error("[admin] coupon creation failed:", error);
+    return { ok: false, message: "Could not create that coupon." };
+  }
+}
+
+export async function toggleCouponAction(
+  _previous: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  await requireAdmin();
+
+  const id = Number(formData.get("id"));
+  const active = formData.get("active") === "1";
+  if (!Number.isInteger(id) || id <= 0) {
+    return { ok: false, message: "Unknown coupon." };
+  }
+
+  try {
+    const changed = await setCouponActive(id, active);
+    if (!changed) return { ok: false, message: "Coupon not found." };
+
+    revalidatePath("/admin/coupons");
+    return {
+      ok: true,
+      message: active
+        ? "Switched on."
+        : "Switched off. Orders that already used it are untouched.",
+    };
+  } catch (error) {
+    console.error("[admin] coupon toggle failed:", error);
+    return { ok: false, message: "Could not change that." };
   }
 }

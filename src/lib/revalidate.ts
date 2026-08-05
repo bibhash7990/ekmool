@@ -1,5 +1,6 @@
 import { revalidateTag, revalidatePath } from "next/cache";
 import { PRODUCTS_TAG } from "@/db/queries/products";
+import { REVIEWS_TAG } from "@/db/queries/reviews";
 
 /**
  * Invalidate everything that renders catalogue data.
@@ -37,4 +38,17 @@ export function revalidateCatalog(): void {
   revalidatePath("/");
   revalidatePath("/products");
   revalidatePath("/sitemap.xml");
+}
+
+/**
+ * Publishing or rejecting a review. Its own tag and its own function,
+ * because the two invalidations are not the same event and should not
+ * become one: moderating a review must not purge the catalogue cache and
+ * send every product page back to the database.
+ *
+ * Same rule as above applies and is the reason there is no revalidatePath
+ * for the product routes here either.
+ */
+export function revalidateReviews(): void {
+  revalidateTag(REVIEWS_TAG, "max");
 }

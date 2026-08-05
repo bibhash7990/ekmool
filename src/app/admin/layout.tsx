@@ -65,6 +65,22 @@ export default async function AdminLayout({
               </li>
               <li>
                 <Link
+                  href="/admin/reviews"
+                  className="link-draw font-display text-20 text-ek-green-900"
+                >
+                  Reviews
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/admin/coupons"
+                  className="link-draw font-display text-20 text-ek-green-900"
+                >
+                  Coupons
+                </Link>
+              </li>
+              <li>
+                <Link
                   href="/"
                   className="link-draw text-15 text-ek-green-700"
                 >

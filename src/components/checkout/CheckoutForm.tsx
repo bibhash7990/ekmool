@@ -11,7 +11,12 @@ import {
   selectCartHydrated,
   selectCartItems,
   selectCartSubtotalPaise,
+  selectCouponCode,
 } from "@/store/cart-slice";
+import {
+  quoteBenefit,
+  useCouponQuote,
+} from "@/components/cart/useCouponQuote";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { SoilLine } from "@/components/ui/SoilLine";
 import { formatPaise } from "@/lib/money";
@@ -86,6 +91,7 @@ export function CheckoutForm({
   const hydrated = useAppSelector(selectCartHydrated);
   const items = useAppSelector(selectCartItems);
   const subtotal = useAppSelector(selectCartSubtotalPaise);
+  const couponCode = useAppSelector(selectCouponCode);
 
   const [form, setForm] = useState(EMPTY_FORM);
   const [paymentMethod, setPaymentMethod] = useState<"cod" | "razorpay">("cod");
@@ -107,11 +113,17 @@ export function CheckoutForm({
     return idempotencyKeyRef.current;
   }
 
-  const shipping = useMemo(
+  // Same quote the cart used, so the two pages cannot disagree about what
+  // this order costs.
+  const { quote } = useCouponQuote(couponCode, items);
+  const { discountPaise: discount, shippingWaivedPaise } = quoteBenefit(quote);
+
+  const shippingBeforeCoupon = useMemo(
     () => (subtotal >= FREE_SHIPPING_THRESHOLD_PAISE ? 0 : FLAT_SHIPPING_PAISE),
     [subtotal],
   );
-  const total = subtotal + shipping;
+  const shipping = shippingBeforeCoupon - shippingWaivedPaise;
+  const total = subtotal - discount + shipping;
 
   useEffect(() => {
     if (submitError) errorRef.current?.focus();
@@ -199,6 +211,10 @@ export function CheckoutForm({
       paymentMethod,
       items: items.map((i) => ({ variantId: i.variantId, qty: i.qty })),
       notes: form.notes,
+      // Just the code. The discount is not sent and would not be believed:
+      // the checkout transaction works it out from the coupon row it holds
+      // a lock on, so nothing the client says about money can matter.
+      couponCode: couponCode ?? "",
     };
   }
 
@@ -577,6 +593,17 @@ export function CheckoutForm({
               <dt className="text-ek-green-700">Subtotal</dt>
               <dd className="tabular-nums">{formatPaise(subtotal)}</dd>
             </div>
+            {discount > 0 && (
+              <div className="flex justify-between gap-4">
+                <dt className="text-ek-green-700">
+                  Discount
+                  {couponCode && (
+                    <span className="tracking-[0.06em]"> · {couponCode}</span>
+                  )}
+                </dt>
+                <dd className="tabular-nums">−{formatPaise(discount)}</dd>
+              </div>
+            )}
             <div className="flex justify-between gap-4">
               <dt className="text-ek-green-700">Shipping</dt>
               <dd className="tabular-nums">

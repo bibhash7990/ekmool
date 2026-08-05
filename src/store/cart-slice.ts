@@ -20,12 +20,23 @@ export interface CartItem {
 
 export interface CartState {
   items: CartItem[];
+  /**
+   * The code the customer typed, and only the code.
+   *
+   * What it is worth is never kept here. A stored discount goes stale the
+   * moment the basket changes or someone else claims the last use, and a
+   * cart showing a saving the checkout will not honour is worse than one
+   * that asks again. The cart re-quotes it against the server; checkout
+   * decides it for real.
+   */
+  couponCode: string | null;
   /** True once localStorage has been read on the client (post-mount). */
   hydrated: boolean;
 }
 
 const initialState: CartState = {
   items: [],
+  couponCode: null,
   hydrated: false,
 };
 
@@ -35,9 +46,19 @@ const cartSlice = createSlice({
   name: "cart",
   initialState,
   reducers: {
-    cartHydrated(state, action: PayloadAction<CartItem[]>) {
-      state.items = action.payload;
+    cartHydrated(
+      state,
+      action: PayloadAction<{ items: CartItem[]; couponCode: string | null }>,
+    ) {
+      state.items = action.payload.items;
+      state.couponCode = action.payload.couponCode;
       state.hydrated = true;
+    },
+    couponApplied(state, action: PayloadAction<string>) {
+      state.couponCode = action.payload.trim().toUpperCase();
+    },
+    couponCleared(state) {
+      state.couponCode = null;
     },
     itemAdded(state, action: PayloadAction<CartItem>) {
       const existing = state.items.find(
@@ -74,12 +95,21 @@ const cartSlice = createSlice({
     },
     cartCleared(state) {
       state.items = [];
+      // A code applies to a basket. Emptying the basket ends it.
+      state.couponCode = null;
     },
   },
 });
 
-export const { cartHydrated, itemAdded, qtySet, itemRemoved, cartCleared } =
-  cartSlice.actions;
+export const {
+  cartHydrated,
+  itemAdded,
+  qtySet,
+  itemRemoved,
+  cartCleared,
+  couponApplied,
+  couponCleared,
+} = cartSlice.actions;
 
 export const cartReducer = cartSlice.reducer;
 
@@ -91,6 +121,7 @@ interface RootLike {
 
 export const selectCartItems = (s: RootLike) => s.cart.items;
 export const selectCartHydrated = (s: RootLike) => s.cart.hydrated;
+export const selectCouponCode = (s: RootLike) => s.cart.couponCode;
 export const selectCartCount = (s: RootLike) =>
   s.cart.items.reduce((sum, i) => sum + i.qty, 0);
 export const selectCartSubtotalPaise = (s: RootLike) =>

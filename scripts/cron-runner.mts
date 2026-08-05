@@ -6,6 +6,7 @@
  *
  * Schedules (Asia/Kolkata):
  *   hourly       abandoned-payment-reminder
+ *   hourly :30   final-notice
  *   08:00 IST    low-stock-report
  *   03:30 IST    cancel-stale-orders
  *
@@ -65,6 +66,13 @@ const SCHEDULE: { expression: string; job: string; description: string }[] = [
   {
     expression: "0 * * * *",
     job: "abandoned-payment-reminder",
+    description: "hourly",
+  },
+  {
+    // Offset half an hour from the first reminder so the two sweeps do not
+    // contend for the same rows in the same second.
+    expression: "30 * * * *",
+    job: "final-notice",
     description: "hourly",
   },
   {

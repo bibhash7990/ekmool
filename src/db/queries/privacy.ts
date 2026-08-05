@@ -29,6 +29,8 @@ export interface CustomerExport {
   returnRequests: Record<string, unknown>[];
   savedItems: string[];
   backInStockRequests: Record<string, unknown>[];
+  reviews: Record<string, unknown>[];
+  newsletter: Record<string, unknown> | null;
 }
 
 /**
@@ -117,6 +119,21 @@ export async function exportCustomerData(
     [normalised],
   );
 
+  const [reviews] = await pool.execute<RowDataPacket[]>(
+    `SELECT product_slug, display_name, rating, title, body, status,
+            created_at, published_at
+       FROM reviews WHERE customer_email = ? ORDER BY created_at`,
+    [normalised],
+  );
+
+  // Status and dates only. The token is a live credential for confirming
+  // or unsubscribing, and an export is a file that gets emailed around.
+  const [newsletter] = await pool.execute<RowDataPacket[]>(
+    `SELECT status, confirmed_at, unsubscribed_at, created_at
+       FROM newsletter_subscribers WHERE email = ?`,
+    [normalised],
+  );
+
   return {
     exportedAt: new Date().toISOString(),
     customer: customer ? { ...customer } : null,
@@ -126,6 +143,8 @@ export async function exportCustomerData(
     returnRequests: returnRequests.map((row) => ({ ...row })),
     savedItems: savedItems.map((row) => row.product_slug as string),
     backInStockRequests: backInStockRequests.map((row) => ({ ...row })),
+    reviews: reviews.map((row) => ({ ...row })),
+    newsletter: newsletter[0] ? { ...newsletter[0] } : null,
   };
 }
 
@@ -135,6 +154,8 @@ export interface ErasureResult {
   customerDeleted: boolean;
   savedItemsDeleted: number;
   backInStockDeleted: number;
+  reviewsDeleted: number;
+  newsletterDeleted: number;
 }
 
 /**
@@ -188,6 +209,33 @@ export async function eraseCustomer(email: string): Promise<ErasureResult> {
       [normalised],
     );
 
+    // Reviews go, published or not. A review is somebody's words about a
+    // product, not a record anyone is obliged to keep, and a person asking
+    // to be erased is asking for their words to go with them. Anonymising
+    // the byline and leaving the text would keep the part that is actually
+    // theirs while removing only the label — the wrong half.
+    const [reviewsRemoved] = await connection.execute<ResultSetHeader>(
+      "DELETE FROM reviews WHERE customer_email = ?",
+      [normalised],
+    );
+
+    const [newsletterRemoved] = await connection.execute<ResultSetHeader>(
+      "DELETE FROM newsletter_subscribers WHERE email = ?",
+      [normalised],
+    );
+
+    // Redemptions are anonymised rather than deleted: each one belongs to
+    // an order that survives, and removing it would leave that order
+    // showing a coupon code with no record of it having been claimed.
+    // Per-order uniqueness keeps erased customers from collapsing into one
+    // apparent person — the same reasoning as the orders update below.
+    await connection.execute<ResultSetHeader>(
+      `UPDATE coupon_redemptions
+          SET customer_email = CONCAT('erased+', order_id, '@invalid')
+        WHERE customer_email = ?`,
+      [normalised],
+    );
+
     // The order survives; the person does not. Every column that could name
     // or reach them is overwritten in one statement, so there is no window
     // in which half of it is erased.
@@ -237,6 +285,8 @@ export async function eraseCustomer(email: string): Promise<ErasureResult> {
       customerDeleted,
       savedItemsDeleted,
       backInStockDeleted: backInStock.affectedRows,
+      reviewsDeleted: reviewsRemoved.affectedRows,
+      newsletterDeleted: newsletterRemoved.affectedRows,
     };
   } catch (error) {
     await connection.rollback();

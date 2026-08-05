@@ -77,6 +77,17 @@ export const addressSchema = z.object({
   landmark: z.string().trim().max(200).optional().or(z.literal("")),
 });
 
+/**
+ * Uppercase letters, digits and hyphens. Deliberately narrow: this string
+ * reaches a `WHERE code = ?` and a rendered order summary, so there is no
+ * reason for it to accept anything a promotion code would not contain.
+ */
+export const couponCodeSchema = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .regex(/^[A-Z0-9-]{3,40}$/, "Check the code and try again");
+
 export const checkoutSchema = z.object({
   customer: z.object({
     name: nameSchema,
@@ -87,6 +98,9 @@ export const checkoutSchema = z.object({
   paymentMethod: z.enum(["cod", "razorpay"]),
   items: z.array(checkoutItemSchema).min(1, "Your cart is empty").max(20),
   notes: z.string().trim().max(500).optional().or(z.literal("")),
+  // What the customer typed. What it is worth is decided in the checkout
+  // transaction against a locked row, never here and never by the client.
+  couponCode: couponCodeSchema.optional().or(z.literal("")),
 });
 
 export type CheckoutInput = z.infer<typeof checkoutSchema>;

@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { CouponField } from "./CouponField";
+import { quoteBenefit, useCouponQuote } from "./useCouponQuote";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
   itemRemoved,
@@ -8,6 +10,7 @@ import {
   selectCartHydrated,
   selectCartItems,
   selectCartSubtotalPaise,
+  selectCouponCode,
 } from "@/store/cart-slice";
 import { ButtonLink } from "@/components/ui/Button";
 import { PincodeCheck } from "@/components/shipping/PincodeCheck";
@@ -24,6 +27,11 @@ export function CartView() {
   const hydrated = useAppSelector(selectCartHydrated);
   const items = useAppSelector(selectCartItems);
   const subtotal = useAppSelector(selectCartSubtotalPaise);
+  const couponCode = useAppSelector(selectCouponCode);
+
+  // Hooks run before the early returns below, which is why this one is
+  // here rather than beside the totals it feeds.
+  const { quote } = useCouponQuote(couponCode, items);
 
   // Server HTML and first client paint both render this skeleton, so the
   // persisted cart can never cause a hydration mismatch.
@@ -48,9 +56,16 @@ export function CartView() {
     );
   }
 
-  const shipping =
+  // The threshold is judged on the basket, before any coupon — the same
+  // rule the server applies in shippingFor(), and the reason a voucher
+  // never takes away free delivery someone has already earned.
+  const shippingBeforeCoupon =
     subtotal >= FREE_SHIPPING_THRESHOLD_PAISE ? 0 : FLAT_SHIPPING_PAISE;
   const remainingForFree = FREE_SHIPPING_THRESHOLD_PAISE - subtotal;
+
+  const { discountPaise: discount, shippingWaivedPaise } = quoteBenefit(quote);
+  const shipping = shippingBeforeCoupon - shippingWaivedPaise;
+  const total = subtotal - discount + shipping;
 
   return (
     <div className="grid gap-12 lg:grid-cols-[1.4fr_0.6fr] lg:gap-16">
@@ -133,6 +148,14 @@ export function CartView() {
               {formatPaise(subtotal)}
             </dd>
           </div>
+          {discount > 0 && (
+            <div className="flex justify-between gap-4">
+              <dt className="text-ek-green-700">Discount</dt>
+              <dd className="tabular-nums text-ek-green-900">
+                −{formatPaise(discount)}
+              </dd>
+            </div>
+          )}
           <div className="flex justify-between gap-4">
             <dt className="text-ek-green-700">Shipping</dt>
             <dd className="tabular-nums text-ek-green-900">
@@ -142,10 +165,12 @@ export function CartView() {
           <div className="flex justify-between gap-4 border-t border-ek-green-200 pt-3 text-20 font-semibold">
             <dt className="text-ek-green-900">Total</dt>
             <dd className="tabular-nums text-ek-green-900">
-              {formatPaise(subtotal + shipping)}
+              {formatPaise(total)}
             </dd>
           </div>
         </dl>
+
+        <CouponField />
 
         {remainingForFree > 0 && (
           <p className="mt-4 bg-ek-gold-100 px-4 py-3 text-15 text-ek-green-900">
@@ -159,7 +184,7 @@ export function CartView() {
           className="mt-7 w-full"
           onClick={() =>
             track("begin_checkout", {
-              value: (subtotal + shipping) / 100,
+              value: total / 100,
               items: items.length,
             })
           }

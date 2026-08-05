@@ -209,13 +209,20 @@ Vercel Cron does not exist here. Either run the bundled scheduler:
 pm2 start "npm run cron" --name ekmool-cron
 ```
 
-(`node-cron`, `Asia/Kolkata`, same three jobs) — or use system cron:
+(`node-cron`, `Asia/Kolkata`, same four jobs) — or use system cron:
 
 ```bash
 0 * * * * curl -fsS -X POST -H "x-cron-secret: $CRON_SECRET" https://ekmool.com/api/jobs/abandoned-payment-reminder
 ```
 
-Use one or the other. Both means duplicate reminder emails.
+```bash
+30 * * * * curl -fsS -X POST -H "x-cron-secret: $CRON_SECRET" https://ekmool.com/api/jobs/final-notice
+```
+
+Use one or the other. Running both is safe against duplicate emails —
+each job claims its order with an atomic UPDATE before sending, so a
+second runner finds nothing to claim — but it doubles the load for no
+benefit.
 
 ---
 

@@ -47,6 +47,16 @@ export function buildOrderConfirmedEmail(
 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:14px;">
       ${totalsRow("Subtotal", formatPaise(order.subtotalPaise))}
+      ${
+        order.discountPaise > 0
+          ? totalsRow(
+              order.couponCode
+                ? `Discount (${escapeHtml(order.couponCode)})`
+                : "Discount",
+              `-${formatPaise(order.discountPaise)}`,
+            )
+          : ""
+      }
       ${totalsRow(
         "Shipping",
         order.shippingPaise === 0 ? "Free" : formatPaise(order.shippingPaise),
@@ -88,6 +98,11 @@ export function buildOrderConfirmedEmail(
     ),
     ``,
     `Subtotal: ${formatPaise(order.subtotalPaise)}`,
+    ...(order.discountPaise > 0
+      ? [
+          `Discount${order.couponCode ? ` (${order.couponCode})` : ""}: -${formatPaise(order.discountPaise)}`,
+        ]
+      : []),
     `Shipping: ${order.shippingPaise === 0 ? "Free" : formatPaise(order.shippingPaise)}`,
     `Total: ${formatPaise(order.totalPaise)}`,
     ``,

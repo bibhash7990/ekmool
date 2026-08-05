@@ -45,6 +45,51 @@ export async function releaseReminder(orderId: string): Promise<void> {
   );
 }
 
+/**
+ * Orders about to be released: still unpaid a day after they were placed,
+ * and a day away from cancelStaleOrders taking the stock back.
+ *
+ * The lower bound is 20 hours rather than 24 so an hourly scheduler that
+ * drifts, or a deployment that skips a run, does not push the notice past
+ * the point where it is still useful. The upper bound is 47 hours, one
+ * short of the cancel window: a "we are about to release this" email that
+ * arrives after the order was already released is worse than none.
+ */
+export async function findFinalNoticeOrderIds(limit = 50): Promise<string[]> {
+  const pool = getPool();
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `SELECT id FROM orders
+      WHERE payment_status = 'pending'
+        AND payment_method = 'razorpay'
+        AND status = 'pending'
+        AND final_notice_sent_at IS NULL
+        AND created_at < NOW() - INTERVAL 20 HOUR
+        AND created_at > NOW() - INTERVAL 47 HOUR
+      ORDER BY created_at
+      LIMIT ${Math.min(Math.max(Math.floor(limit), 1), 200)}`,
+  );
+  return rows.map((row) => row.id as string);
+}
+
+/** Same atomic claim as the first reminder, on the second column. */
+export async function claimFinalNotice(orderId: string): Promise<boolean> {
+  const pool = getPool();
+  const [result] = await pool.execute<ResultSetHeader>(
+    `UPDATE orders SET final_notice_sent_at = NOW()
+      WHERE id = ? AND final_notice_sent_at IS NULL`,
+    [orderId],
+  );
+  return result.affectedRows === 1;
+}
+
+export async function releaseFinalNotice(orderId: string): Promise<void> {
+  const pool = getPool();
+  await pool.execute<ResultSetHeader>(
+    `UPDATE orders SET final_notice_sent_at = NULL WHERE id = ?`,
+    [orderId],
+  );
+}
+
 export interface StaleCancellation {
   orderId: string;
   restored: { sku: string; qty: number }[];

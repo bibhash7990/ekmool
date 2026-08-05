@@ -110,8 +110,9 @@ export function PrivacyControls({ email }: { email: string }) {
           <dt className="font-medium text-ek-green-900">Deleted outright</dt>
           <dd className="mt-1 text-ek-green-700">
             Your account, your name, your phone number, your saved addresses,
-            your saved items, any back-in-stock requests, and your email
-            address wherever it appears.
+            your saved items, any reviews you wrote, your newsletter
+            subscription, any back-in-stock requests, and your email address
+            wherever it appears.
           </dd>
           <dt className="mt-4 font-medium text-ek-green-900">
             Kept, but no longer yours

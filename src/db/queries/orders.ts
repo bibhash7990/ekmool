@@ -3,6 +3,8 @@ import { ulid } from "ulidx";
 import type { PoolConnection, ResultSetHeader, RowDataPacket } from "mysql2/promise";
 import { getPool } from "@/db/pool";
 import { upsertCustomerTx } from "@/db/queries/customers";
+import { claimCouponTx, recordRedemptionTx } from "@/db/queries/coupons";
+import { allocateDiscount, type CouponRefusal } from "@/lib/coupons";
 import { timingSafeEquals } from "@/lib/crypto";
 import { sellerState } from "@/lib/env";
 import {
@@ -28,6 +30,11 @@ export interface OrderItem {
   unitPricePaise: number;
   qty: number;
   lineTotalPaise: number;
+  /**
+   * This line's share of the order discount. Subtracted before the tax
+   * split, never after — see 006_promotions.sql.
+   */
+  discountPaise: number;
   /** Frozen at the time of supply — see 003_gst_invoicing.sql. */
   hsnCode: string | null;
   gstRateBps: number;
@@ -54,6 +61,9 @@ export interface Order {
   paymentStatus: PaymentStatus;
   razorpayOrderId: string | null;
   subtotalPaise: number;
+  couponCode: string | null;
+  /** Money off the goods. Shipping waived shows as shippingPaise = 0. */
+  discountPaise: number;
   shippingPaise: number;
   totalPaise: number;
   status: OrderStatus;
@@ -79,6 +89,24 @@ export class UnknownVariantError extends Error {
   constructor(public readonly variantId: number) {
     super(`Unknown or inactive variant ${variantId}`);
     this.name = "UnknownVariantError";
+  }
+}
+
+/**
+ * A coupon that the cart accepted and checkout would not.
+ *
+ * Thrown rather than ignored, which rolls the whole transaction back and
+ * puts the stock decrement with it. Placing the order at full price because
+ * the code turned out to be exhausted between the two would be charging
+ * someone more than the page they were looking at said.
+ */
+export class CouponRefusedError extends Error {
+  constructor(
+    public readonly reason: CouponRefusal,
+    public readonly minSubtotalPaise: number | null,
+  ) {
+    super(`Coupon refused: ${reason}`);
+    this.name = "CouponRefusedError";
   }
 }
 
@@ -145,8 +173,14 @@ export async function createOrder(input: {
     const placeOfSupply = address.state;
     const kind = supplyKind(sellerState, placeOfSupply);
 
-    const items: OrderItem[] = [];
-    const variantIdByIndex: (number | null)[] = [];
+    // First pass: take the stock and establish what each line is worth.
+    // Tax cannot be computed yet — a coupon has not been applied, and the
+    // discount changes the taxable value.
+    const priced: {
+      variant: VariantPriceRow;
+      qty: number;
+      lineTotalPaise: number;
+    }[] = [];
 
     for (const requested of input.checkout.items) {
       const variant = byId.get(requested.variantId);
@@ -172,20 +206,82 @@ export async function createOrder(input: {
         );
       }
 
-      const lineTotalPaise = variant.price_inr * requested.qty;
-      // Prices include GST, so the tax comes out of this figure rather
-      // than being added to it. See src/lib/gst.ts.
-      const tax = taxFromInclusive(lineTotalPaise, variant.gst_rate_bps, kind);
+      priced.push({
+        variant,
+        qty: requested.qty,
+        lineTotalPaise: variant.price_inr * requested.qty,
+      });
+    }
+
+    const subtotalPaise = priced.reduce((sum, p) => sum + p.lineTotalPaise, 0);
+    // The free-shipping threshold is judged on what went into the basket,
+    // before any coupon. Taking away delivery someone had already earned,
+    // because they then used a voucher, reads as a penalty for using it.
+    const shippingBeforeCoupon = shippingFor(subtotalPaise);
+
+    // The coupon lock is taken after the variant locks and before the
+    // customer upsert, so every checkout takes the same locks in the same
+    // order and two of them cannot deadlock against each other.
+    let couponCode: string | null = null;
+    let couponId: number | null = null;
+    let discountPaise = 0;
+    let shippingPaise = shippingBeforeCoupon;
+    let benefitPaise = 0;
+
+    if (input.checkout.couponCode) {
+      const claim = await claimCouponTx(connection, {
+        code: input.checkout.couponCode,
+        subtotalPaise,
+        shippingPaise: shippingBeforeCoupon,
+        email: customer.email,
+      });
+
+      if (!claim.ok) {
+        throw new CouponRefusedError(
+          claim.reason,
+          claim.coupon?.minSubtotalPaise ?? null,
+        );
+      }
+
+      couponCode = claim.coupon.code;
+      couponId = claim.coupon.id;
+      discountPaise = claim.benefit.goodsDiscountPaise;
+      shippingPaise = shippingBeforeCoupon - claim.benefit.shippingWaivedPaise;
+      benefitPaise = claim.benefit.benefitPaise;
+    }
+
+    // Shares sum to discountPaise exactly, so subtotal - discount is the
+    // sum of the net lines and the invoice adds up.
+    const shares = allocateDiscount(
+      priced.map((p) => p.lineTotalPaise),
+      discountPaise,
+    );
+
+    const items: OrderItem[] = [];
+    const variantIdByIndex: (number | null)[] = [];
+
+    for (const [index, line] of priced.entries()) {
+      const lineDiscount = shares[index];
+      // Prices include GST, so the tax comes out of this figure rather than
+      // being added to it — and it comes out of the *discounted* figure,
+      // because a discount recorded on the invoice reduces the transaction
+      // value under s.15(3)(a) of the CGST Act. See src/lib/gst.ts.
+      const tax = taxFromInclusive(
+        line.lineTotalPaise - lineDiscount,
+        line.variant.gst_rate_bps,
+        kind,
+      );
 
       items.push({
-        sku: variant.sku,
-        productSlug: variant.product_slug,
-        productName: variant.product_name,
-        packSizeLabel: variant.pack_size_label,
-        unitPricePaise: variant.price_inr,
-        qty: requested.qty,
-        lineTotalPaise,
-        hsnCode: variant.hsn_code,
+        sku: line.variant.sku,
+        productSlug: line.variant.product_slug,
+        productName: line.variant.product_name,
+        packSizeLabel: line.variant.pack_size_label,
+        unitPricePaise: line.variant.price_inr,
+        qty: line.qty,
+        lineTotalPaise: line.lineTotalPaise,
+        discountPaise: lineDiscount,
+        hsnCode: line.variant.hsn_code,
         // tax.rateBps, not variant.gst_rate_bps: the rate that was applied,
         // not the one the catalogue would have charged. An unregistered shop
         // applies none, and the snapshot has to say so or the line reads
@@ -196,12 +292,10 @@ export async function createOrder(input: {
         sgstPaise: tax.sgstPaise,
         igstPaise: tax.igstPaise,
       });
-      variantIdByIndex.push(requested.variantId);
+      variantIdByIndex.push(line.variant.id);
     }
 
-    const subtotalPaise = items.reduce((sum, i) => sum + i.lineTotalPaise, 0);
-    const shippingPaise = shippingFor(subtotalPaise);
-    const totalPaise = subtotalPaise + shippingPaise;
+    const totalPaise = subtotalPaise - discountPaise + shippingPaise;
 
     // COD is confirmed on placement; online payment waits for the webhook.
     const status: OrderStatus = paymentMethod === "cod" ? "confirmed" : "pending";
@@ -216,9 +310,10 @@ export async function createOrder(input: {
          (id, customer_id, idempotency_key, customer_name, customer_email,
           customer_phone, address_line1, address_line2, address_city,
           address_state, address_pincode, address_landmark, payment_method,
-          payment_status, subtotal_paise, shipping_paise, total_paise,
+          payment_status, subtotal_paise, coupon_code, discount_paise,
+          shipping_paise, total_paise,
           status, notes, place_of_supply, seller_state)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         orderId,
         customerId,
@@ -234,6 +329,8 @@ export async function createOrder(input: {
         address.landmark || null,
         paymentMethod,
         subtotalPaise,
+        couponCode,
+        discountPaise,
         shippingPaise,
         totalPaise,
         status,
@@ -243,14 +340,25 @@ export async function createOrder(input: {
       ],
     );
 
+    if (couponId !== null) {
+      await recordRedemptionTx(connection, {
+        couponId,
+        orderId,
+        email: customer.email,
+        // The whole benefit, goods and shipping together — which is the
+        // number the owner wants when asking what a promotion cost.
+        discountPaise: benefitPaise,
+      });
+    }
+
     for (const [index, item] of items.entries()) {
       await connection.execute<ResultSetHeader>(
         `INSERT INTO order_items
            (order_id, variant_id, sku, product_slug, product_name,
             pack_size_label, unit_price_paise, qty, line_total_paise,
-            hsn_code, gst_rate_bps, taxable_value_paise,
+            discount_paise, hsn_code, gst_rate_bps, taxable_value_paise,
             cgst_paise, sgst_paise, igst_paise)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           orderId,
           variantIdByIndex[index],
@@ -261,6 +369,7 @@ export async function createOrder(input: {
           item.unitPricePaise,
           item.qty,
           item.lineTotalPaise,
+          item.discountPaise,
           item.hsnCode,
           item.gstRateBps,
           item.taxableValuePaise,
@@ -292,6 +401,8 @@ export async function createOrder(input: {
       paymentStatus: "pending",
       razorpayOrderId: null,
       subtotalPaise,
+      couponCode,
+      discountPaise,
       shippingPaise,
       totalPaise,
       status,
@@ -342,6 +453,8 @@ interface OrderRow extends RowDataPacket {
   payment_status: PaymentStatus;
   razorpay_order_id: string | null;
   subtotal_paise: number;
+  coupon_code: string | null;
+  discount_paise: number;
   shipping_paise: number;
   total_paise: number;
   status: OrderStatus;
@@ -362,6 +475,7 @@ interface OrderItemRow extends RowDataPacket {
   unit_price_paise: number;
   qty: number;
   line_total_paise: number;
+  discount_paise: number;
   hsn_code: string | null;
   gst_rate_bps: number;
   taxable_value_paise: number;
@@ -381,8 +495,8 @@ export async function getOrderById(id: string): Promise<Order | null> {
 
   const [itemRows] = await pool.execute<OrderItemRow[]>(
     `SELECT sku, product_slug, product_name, pack_size_label,
-            unit_price_paise, qty, line_total_paise, hsn_code,
-            gst_rate_bps, taxable_value_paise,
+            unit_price_paise, qty, line_total_paise, discount_paise,
+            hsn_code, gst_rate_bps, taxable_value_paise,
             cgst_paise, sgst_paise, igst_paise
        FROM order_items WHERE order_id = ? ORDER BY id`,
     [id],
@@ -405,6 +519,8 @@ export async function getOrderById(id: string): Promise<Order | null> {
     paymentStatus: row.payment_status,
     razorpayOrderId: row.razorpay_order_id,
     subtotalPaise: row.subtotal_paise,
+    couponCode: row.coupon_code,
+    discountPaise: row.discount_paise,
     shippingPaise: row.shipping_paise,
     totalPaise: row.total_paise,
     status: row.status,
@@ -423,6 +539,7 @@ export async function getOrderById(id: string): Promise<Order | null> {
       unitPricePaise: i.unit_price_paise,
       qty: i.qty,
       lineTotalPaise: i.line_total_paise,
+      discountPaise: i.discount_paise,
       hsnCode: i.hsn_code,
       gstRateBps: i.gst_rate_bps,
       taxableValuePaise: i.taxable_value_paise,

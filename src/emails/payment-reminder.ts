@@ -26,7 +26,7 @@ export function buildPaymentReminderEmail(
       If you would rather pay on delivery, choose Cash on Delivery at checkout — it is available everywhere we ship in India.
     </p>
     <p style="margin:14px 0 0;font-size:14px;">
-      This is the only reminder we will send. If you have changed your mind, you can safely ignore it and the order will be released in 48 hours.
+      If you have changed your mind, ignore this — the order is released after 48 hours and there is nothing to cancel. We will write once more before that happens, and not again after it.
     </p>`;
 
   const text = [
@@ -37,7 +37,8 @@ export function buildPaymentReminderEmail(
     `Complete it here: ${appUrl}/cart`,
     ``,
     `Prefer to pay on delivery? Choose Cash on Delivery at checkout.`,
-    `This is the only reminder we will send; unpaid orders are released after 48 hours.`,
+    `Unpaid orders are released after 48 hours. We will write once more before`,
+    `that happens, and not again after it.`,
   ].join("\n");
 
   return {

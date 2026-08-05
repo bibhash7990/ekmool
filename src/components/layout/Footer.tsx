@@ -3,6 +3,7 @@ import Link from "next/link";
 import { NAV_LINKS, POLICY_LINKS, SITE_TAGLINE } from "@/lib/constants";
 import { PRODUCT_SLUGS } from "@/lib/constants";
 import { ConsentSettingsLink } from "@/components/consent/ConsentSettingsLink";
+import { NewsletterSignup } from "./NewsletterSignup";
 
 const PRODUCT_NAMES: Record<string, string> = {
   "kandhamal-turmeric-powder": "Kandhamal Turmeric",
@@ -119,7 +120,11 @@ export function Footer() {
           </nav>
         </div>
 
-        <div className="mt-14 flex flex-col gap-3 border-t border-ek-cream/15 pt-8 text-15 text-ek-cream/60 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-14 border-t border-ek-cream/15 pt-10">
+          <NewsletterSignup />
+        </div>
+
+        <div className="mt-12 flex flex-col gap-3 border-t border-ek-cream/15 pt-8 text-15 text-ek-cream/60 sm:flex-row sm:items-center sm:justify-between">
           <p>© {year} Ekmool. All rights reserved.</p>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
             {/* Withdrawing consent has to be as easy as giving it, so this

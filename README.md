@@ -119,6 +119,7 @@ All of these run against a live server and a live database, so start one first
 | `npm run test:commerce` | GST arithmetic and the split, invoice numbering, returns windows, re-order, prefill |
 | `npm run test:consent` | Security headers, that nothing tracks before consent, the grievance notice, the honeypot |
 | `npm run test:discovery` | Search ranking and synonyms, filters, PIN code estimates, wishlist scoping, back-in-stock |
+| `npm run test:promotions` | Coupon arithmetic, caps under concurrency, GST on a discounted line, verified-buyer reviews, newsletter double opt-in, share cards |
 | `npm run test:db-down` | Browsing with MySQL stopped (stop it first) |
 | `npm run test:jobs` | Cron authorisation, stale-order cancel, reminder dedupe |
 | `npm run validate:schema` | Titles, descriptions, canonicals, JSON-LD, internal links |
@@ -249,9 +250,56 @@ All of these run against a live server and a live database, so start one first
   what was just taken out. A session whose customer row is gone answers
   `401`, exactly as a guest does — it used to answer `200 {slugs: []}`, and
   the page read that as a completed merge and wiped the local list.
+- **A discount changes the tax, so it is applied before the tax is worked
+  out.** Prices are GST-inclusive and s.15(3)(a) of the CGST Act excludes a
+  discount given at the time of supply and recorded on the invoice from the
+  transaction value — so each line's tax comes out of `line_total -
+  discount`, and each line's share of the discount is stored in
+  `order_items.discount_paise`. Taxing the undiscounted line would
+  over-declare output tax on every order that used a voucher while the
+  total the customer paid still looked right, which is why
+  `test:promotions` reconciles **line rows** rather than the order total.
+  The split is largest-remainder (`allocateDiscount`), so the shares sum to
+  the order discount to the paise.
+- **Free shipping is waived, not discounted,** and the threshold is judged
+  on the pre-coupon subtotal. Waiving leaves the taxable value alone;
+  discounting the goods would move it. Judging the threshold after the
+  discount would take away delivery someone had already earned by what they
+  put in the basket, which reads as a penalty for using the code.
+- **The cart's coupon panel is a quote, and nothing more.** The only
+  authority is `claimCouponTx`, inside the checkout transaction, under
+  `SELECT ... FOR UPDATE` on the coupon row — that row lock is what makes
+  "first 100 orders" true rather than approximately true. Reserving a use
+  while somebody browses would let a handful of abandoned carts exhaust a
+  promotion. The coupon lock is taken **after** the variant locks and
+  before the customer upsert, so every checkout takes the same locks in the
+  same order and two cannot deadlock.
+- **A review needs a delivered order, enforced in SQL.** Every write path
+  goes through `findReviewableOrder`, which only returns an order that is
+  `delivered`, belongs to the session email, and contained that product;
+  there is no function that can insert a review without one. The byline is
+  derived from the order name ("Bibhash S."), never typed, or one customer
+  could sign as another. `AggregateRating` is emitted only when published
+  reviews exist, and `validate:schema` checks it against the page — the
+  count must match and each review must actually be printed in the HTML.
+- **Reviews have their own cache tag.** Publishing one calls
+  `revalidateReviews()` alone, so it does not send every product page back
+  to the database for catalogue data that has not changed. `/api/revalidate`
+  purges both, because a manual escape hatch that leaves half the cache in
+  place is worse than none.
+- **A tag purge does not rebuild — it marks stale.** After
+  `revalidateTag`, the next request serves the old copy and triggers a
+  regeneration behind it, so it takes repeated requests before a page is
+  fresh. Scripts that assert on freshly published content use the
+  `freshPage()` helper rather than assuming one fetch is enough; this was
+  measured, not guessed.
 - **Parameterised SQL only**, secrets only via env.
-- **Never fabricate social proof.** There are no ratings, no review counts, and
-  scarcity messaging appears only when the stock number is literally true. The
-  same rule covers a GSTIN: there is no placeholder anywhere, and the one in
-  `scripts/test-commerce.mjs` is a fixture that a spawned test server reads —
-  it never reaches a config file or a rendered document.
+- **Never fabricate social proof.** Nothing in `reviews` is seeded, and a
+  product nobody has reviewed shows no rating, no average and no count —
+  not a zero, not a placeholder. `getProductReviews` returns `rating: null`
+  rather than a zeroed object precisely so a caller cannot print "0.0 out
+  of 5" for a product with no reviews. Scarcity messaging appears only when
+  the stock number is literally true. The same rule covers a GSTIN: there
+  is no placeholder anywhere, and the ones in `scripts/test-commerce.mjs`
+  and `scripts/test-promotions.mjs` are fixtures a spawned test server
+  reads — they never reach a config file or a rendered document.

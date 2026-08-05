@@ -66,6 +66,21 @@ function firstMatch(html, regex) {
   return match ? decode(match[1]) : null;
 }
 
+/**
+ * The other direction: a string as JSON-LD holds it, re-encoded the way
+ * React writes it into the body, so the two can be compared. Only the
+ * characters React escapes — enough to find a review title, which is what
+ * this is for.
+ */
+function escapeForHtml(text) {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#x27;");
+}
+
 const failures = [];
 const warnings = [];
 /** internal href -> set of pages that link to it */
@@ -142,9 +157,54 @@ async function checkPage({ path, types }) {
       if (doc["@type"]) found.add(doc["@type"]);
       if (!doc["@context"])
         fail(path, `JSON-LD block missing @context (@type ${doc["@type"]})`);
-      // Never claim ratings we do not have.
-      if (doc.aggregateRating || doc.review)
-        fail(path, "JSON-LD contains aggregateRating/review — none are real");
+
+      /**
+       * Ratings must be real, and this used to be enforced by forbidding
+       * aggregateRating outright — correct while the site had no reviews,
+       * and wrong from the moment it had one.
+       *
+       * The rule that survives real reviews is **consistency with the
+       * page**: a rating may only appear alongside the reviews it
+       * averages, the count must match the number of them, and each one
+       * must actually be printed in the HTML a reader sees. An invented
+       * rating fails all three, which is the point — the check no longer
+       * depends on the site happening to have no reviews.
+       */
+      if (doc.aggregateRating || doc.review) {
+        const reviews = Array.isArray(doc.review) ? doc.review : [];
+        const aggregate = doc.aggregateRating;
+
+        if (!aggregate) {
+          fail(path, "JSON-LD has review entries with no aggregateRating");
+        } else if (reviews.length === 0) {
+          fail(
+            path,
+            "JSON-LD has an aggregateRating with no reviews behind it",
+          );
+        } else {
+          const count = Number(aggregate.reviewCount ?? 0);
+          const value = Number(aggregate.ratingValue ?? 0);
+
+          if (count < reviews.length) {
+            fail(
+              path,
+              `aggregateRating claims ${count} reviews but carries ${reviews.length}`,
+            );
+          }
+          if (!(value >= 1 && value <= 5)) {
+            fail(path, `aggregateRating ratingValue ${value} is out of range`);
+          }
+          for (const review of reviews) {
+            const title = String(review.name ?? "");
+            if (title && !html.includes(escapeForHtml(title))) {
+              fail(
+                path,
+                `JSON-LD review "${title}" is not shown anywhere on the page`,
+              );
+            }
+          }
+        }
+      }
     }
   }
   for (const type of types) {

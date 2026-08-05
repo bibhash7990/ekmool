@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 
 import { getCatalog, getProductBySlug } from "@/db/queries/products";
+import { getProductReviews } from "@/db/queries/reviews";
 import { getProductContent, PRODUCT_CONTENT } from "@/content/products";
 import { appUrl } from "@/lib/env";
 import { turnstileSiteKey } from "@/lib/turnstile";
@@ -19,6 +20,7 @@ import { ProductPurchase } from "@/components/product/ProductPurchase";
 import { ProductFaqList } from "@/components/product/ProductFaq";
 import { RelatedProducts } from "@/components/product/RelatedProducts";
 import { RecentlyViewed } from "@/components/product/RecentlyViewed";
+import { ProductReviews } from "@/components/product/ProductReviews";
 
 export const revalidate = 3600;
 export const dynamicParams = false;
@@ -95,14 +97,10 @@ export async function generateMetadata({
       url: `/products/${slug}`,
       title: `${content.titleTag} | Ekmool`,
       description: content.metaDescription,
-      images: [
-        {
-          url: "/brand/ekmool-logo-primary-2048.png",
-          width: 2048,
-          height: 1792,
-          alt: `${product.name} — Ekmool single origin`,
-        },
-      ],
+      // No `images` here on purpose. opengraph-image.tsx in this folder
+      // generates a per-product card at build time, and Next wires it up
+      // automatically — listing an image here would override it with the
+      // same logo on all five pages.
     },
     twitter: {
       card: "summary_large_image",
@@ -118,7 +116,10 @@ export default async function ProductPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const catalog = await getCatalog();
+  const [catalog, reviewData] = await Promise.all([
+    getCatalog(),
+    getProductReviews(slug),
+  ]);
   const product = catalog.find((entry) => entry.slug === slug) ?? null;
   const content = getProductContent(slug);
   if (!product || !content) notFound();
@@ -139,7 +140,39 @@ export default async function ProductPage({
     image: primaryImage ? [`${appUrl}${primaryImage.url}`] : undefined,
     brand: { "@type": "Brand", name: "Ekmool" },
     countryOfOrigin: { "@type": "Country", name: "India" },
-    // No aggregateRating / review — we have no real reviews yet.
+    /**
+     * AggregateRating appears only when there are published reviews behind
+     * it, and the numbers are the ones printed on the page.
+     *
+     * Emitting a rating with no ratings in it is the single most common
+     * piece of structured-data fraud in ecommerce, it is a Google
+     * spam-policy violation, and it would contradict the review section a
+     * few hundred pixels below saying nobody has reviewed this yet.
+     */
+    ...(reviewData.rating
+      ? {
+          aggregateRating: {
+            "@type": "AggregateRating",
+            ratingValue: reviewData.rating.average,
+            reviewCount: reviewData.rating.count,
+            bestRating: 5,
+            worstRating: 1,
+          },
+          review: reviewData.reviews.slice(0, 5).map((review) => ({
+            "@type": "Review",
+            reviewRating: {
+              "@type": "Rating",
+              ratingValue: review.rating,
+              bestRating: 5,
+              worstRating: 1,
+            },
+            author: { "@type": "Person", name: review.displayName },
+            name: review.title,
+            reviewBody: review.body,
+            datePublished: review.createdAt.toISOString().slice(0, 10),
+          })),
+        }
+      : {}),
     offers: {
       "@type": "AggregateOffer",
       priceCurrency: "INR",
@@ -288,6 +321,14 @@ export default async function ProductPage({
             <ProductFaqList faq={content.faq} headingId="faq-heading" />
           </div>
         </section>
+
+        <SoilLine className="my-16 lg:my-24" />
+
+        <ProductReviews
+          productSlug={product.slug}
+          productName={product.name}
+          data={reviewData}
+        />
 
         <SoilLine className="my-16 lg:my-24" />
 

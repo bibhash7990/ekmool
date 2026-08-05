@@ -6,7 +6,9 @@ import {
   attachRazorpayOrderId,
   InsufficientStockError,
   UnknownVariantError,
+  CouponRefusedError,
 } from "@/db/queries/orders";
+import { couponRefusalMessage } from "@/lib/coupons";
 import { createRazorpayOrder } from "@/lib/razorpay";
 import { buildOrderConfirmedEmail } from "@/emails/order-confirmed";
 import { sendAndLog } from "@/lib/mail";
@@ -176,6 +178,23 @@ export async function POST(request: NextRequest) {
           { status: 200 },
         );
       }
+    }
+
+    // The cart accepted a code that checkout would not — exhausted between
+    // the two, expired on the stroke, or the basket changed under it. The
+    // order was rolled back rather than placed at full price, so the reply
+    // has to say which rule refused it and let them decide.
+    if (error instanceof CouponRefusedError) {
+      return NextResponse.json(
+        {
+          error: couponRefusalMessage(error.reason, {
+            minSubtotalPaise: error.minSubtotalPaise ?? undefined,
+          }),
+          code: "COUPON_REFUSED",
+          reason: error.reason,
+        },
+        { status: 409 },
+      );
     }
 
     if (error instanceof InsufficientStockError) {

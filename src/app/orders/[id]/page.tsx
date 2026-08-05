@@ -173,6 +173,19 @@ export default async function OrderPage({
             <dt className="text-ek-green-700">Subtotal</dt>
             <dd className="tabular-nums">{formatPaise(order.subtotalPaise)}</dd>
           </div>
+          {order.discountPaise > 0 && (
+            <div className="flex justify-between gap-4">
+              <dt className="text-ek-green-700">
+                Discount
+                {order.couponCode && (
+                  <span className="tracking-[0.06em]"> · {order.couponCode}</span>
+                )}
+              </dt>
+              <dd className="tabular-nums">
+                −{formatPaise(order.discountPaise)}
+              </dd>
+            </div>
+          )}
           <div className="flex justify-between gap-4">
             <dt className="text-ek-green-700">Shipping</dt>
             <dd className="tabular-nums">

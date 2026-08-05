@@ -101,11 +101,15 @@ export default async function InvoicePage({
   const isTaxInvoice = seller !== null && taxTotal > 0;
 
   // What the goods were sold for, when no tax is being accounted for. The
-  // stored taxable value is only meaningful alongside a tax figure.
+  // stored taxable value is only meaningful alongside a tax figure. The
+  // discount is already out of the line totals' taxable values, so it has
+  // to come out here too or the untaxed document stops reconciling.
   const supplyValue = isTaxInvoice
     ? taxableTotal
-    : order.items.reduce((sum, item) => sum + item.lineTotalPaise, 0) +
-      order.shippingPaise;
+    : order.items.reduce(
+        (sum, item) => sum + item.lineTotalPaise - item.discountPaise,
+        0,
+      ) + order.shippingPaise;
 
   return (
     <div className="mx-auto max-w-[820px] px-5 py-10 print:max-w-none print:px-0 print:py-0">
@@ -290,8 +294,15 @@ export default async function InvoicePage({
                           <>
                             {formatRateBps(item.gstRateBps)}
                             <span className="block">
+                              {/* Net of the discount, not the list total.
+                                  The tax was worked out from the discounted
+                                  figure — s.15(3)(a) — so subtracting the
+                                  taxable value from the list price would
+                                  print a tax that was never charged. */}
                               {formatPaise(
-                                item.lineTotalPaise - item.taxableValuePaise,
+                                item.lineTotalPaise -
+                                  item.discountPaise -
+                                  item.taxableValuePaise,
                               )}
                             </span>
                           </>
@@ -302,7 +313,12 @@ export default async function InvoicePage({
                     </>
                   )}
                   <td className="py-2.5 text-right tabular-nums text-ek-green-900">
-                    {formatPaise(item.lineTotalPaise)}
+                    {formatPaise(item.lineTotalPaise - item.discountPaise)}
+                    {item.discountPaise > 0 && (
+                      <span className="block text-ek-green-700">
+                        was {formatPaise(item.lineTotalPaise)}
+                      </span>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -350,6 +366,27 @@ export default async function InvoicePage({
         </div>
 
         <dl className="ml-auto max-w-xs space-y-2 text-15">
+          {/* Stated before the taxable value, because that is the order in
+              which it applied: s.15(3)(a) of the CGST Act excludes a
+              discount given at the time of supply from the transaction
+              value, so the tax below was worked out after this came off.
+              A reader has to be able to see that from the document. */}
+          {order.discountPaise > 0 && (
+            <div className="flex justify-between gap-6">
+              <dt className="text-ek-green-700">
+                Discount
+                {order.couponCode && (
+                  <span className="block tracking-[0.06em]">
+                    {order.couponCode}
+                  </span>
+                )}
+              </dt>
+              <dd className="tabular-nums text-ek-green-900">
+                −{formatPaise(order.discountPaise)}
+              </dd>
+            </div>
+          )}
+
           <div className="flex justify-between gap-6">
             <dt className="text-ek-green-700">
               {isTaxInvoice ? "Taxable value" : "Value of supply"}

@@ -10,6 +10,7 @@ import {
   selectCartSubtotalPaise,
 } from "@/store/cart-slice";
 import { ButtonLink } from "@/components/ui/Button";
+import { PincodeCheck } from "@/components/shipping/PincodeCheck";
 import { SoilLine } from "@/components/ui/SoilLine";
 import { formatPaise } from "@/lib/money";
 import {
@@ -169,6 +170,10 @@ export function CartView() {
         <p className="mt-4 text-15 text-ek-green-700">
           Cash on Delivery available across India. Taxes included.
         </p>
+
+        {/* Reads the PIN code already entered on a product page, so most
+            people see the answer here without typing anything. */}
+        <PincodeCheck className="mt-8 border-t border-ek-green-200 pt-7" />
       </aside>
     </div>
   );

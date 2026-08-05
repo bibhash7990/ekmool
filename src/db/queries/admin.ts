@@ -231,14 +231,55 @@ export async function listStock(): Promise<StockRow[]> {
   }));
 }
 
+export interface StockUpdate {
+  updated: boolean;
+  /** What it was before. Null when the variant does not exist. */
+  previous: number | null;
+  next: number;
+}
+
+/**
+ * Sets stock and reports what it was.
+ *
+ * The previous value is the point: it is what tells the caller a pack has
+ * crossed from nothing to something, which is the only moment the
+ * back-in-stock queue should be woken. Read under FOR UPDATE inside the
+ * transaction that writes, because reading it separately would let two
+ * concurrent edits both believe they were the restock and mail the queue
+ * twice.
+ */
 export async function setVariantStock(
   variantId: number,
   stockQty: number,
-): Promise<boolean> {
+): Promise<StockUpdate> {
   const pool = getPool();
-  const [result] = await pool.execute<ResultSetHeader>(
-    `UPDATE product_variants SET stock_qty = ? WHERE id = ?`,
-    [Math.max(0, Math.floor(stockQty)), variantId],
-  );
-  return result.affectedRows > 0;
+  const connection = await pool.getConnection();
+  const next = Math.max(0, Math.floor(stockQty));
+
+  try {
+    await connection.beginTransaction();
+
+    const [rows] = await connection.execute<RowDataPacket[]>(
+      `SELECT stock_qty FROM product_variants WHERE id = ? FOR UPDATE`,
+      [variantId],
+    );
+    const current = rows[0];
+    if (!current) {
+      await connection.rollback();
+      return { updated: false, previous: null, next };
+    }
+
+    await connection.execute<ResultSetHeader>(
+      `UPDATE product_variants SET stock_qty = ? WHERE id = ?`,
+      [next, variantId],
+    );
+
+    await connection.commit();
+    return { updated: true, previous: Number(current.stock_qty), next };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 }

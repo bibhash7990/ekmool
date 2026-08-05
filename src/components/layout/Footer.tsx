@@ -80,6 +80,14 @@ export function Footer() {
                   Track your order
                 </Link>
               </li>
+              <li>
+                <Link
+                  href="/wishlist"
+                  className="link-draw text-15 text-ek-cream/90 hover:text-ek-gold-500"
+                >
+                  Saved items
+                </Link>
+              </li>
               {POLICY_LINKS.map((link) => (
                 <li key={link.href}>
                   <Link

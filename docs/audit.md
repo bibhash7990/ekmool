@@ -1,7 +1,8 @@
-# Lighthouse audit — M6
+# Lighthouse audit
 
-Measured 2026-08-04 against a **production build** (`npm run build` → `npx next start -p 3100`)
+Measured against a **production build** (`npm run build` → `npx next start -p 3100`)
 with **no third-party keys configured** — the default state of a fresh clone.
+Last re-run 2026-08-05, at M12.
 
 - Lighthouse 13.4.1 (via `npx`), Chrome stable, headless
 - Mobile form factor with default screen emulation and network throttling
@@ -21,17 +22,20 @@ The script fails the process on any gate breach, so it works unchanged as a CI s
 
 ## Results
 
-| Page | Perf | A11y | BP | SEO | JS | LCP | CLS | TBT |
-|---|---|---|---|---|---|---|---|---|
-| `/` | 100 | 100 | 100 | 100 | 181 KB | 1.3 s | 0 | 40 ms |
-| `/products` | 95 | 100 | 100 | 100 | 185 KB | 3.0 s | 0 | 60 ms |
-| `/products/lakadong-turmeric-powder` | 95 | 100 | 100 | 100 | 185 KB | 2.9 s | 0 | 50 ms |
-| `/blog/what-is-a-gi-tag` | 96 | 100 | 100 | 100 | 181 KB | 2.8 s | 0 | 60 ms |
+| Page | Perf | A11y | BP | SEO | JS | Budget | LCP | CLS | TBT |
+|---|---|---|---|---|---|---|---|---|---|
+| `/` | 99 | 100 | 100 | 100 | 187 KB | 190 | 2.1 s | 0 | 30 ms |
+| `/products` | 95 | 100 | 100 | 100 | 187 KB | 190 | 2.9 s | 0 | 50 ms |
+| `/products/lakadong-turmeric-powder` | 94 | 100 | 100 | 100 | 194 KB | 200 | 3.0 s | 0 | 30 ms |
+| `/blog/what-is-a-gi-tag` | 98 | 100 | 100 | 100 | 183 KB | 190 | 2.3 s | 0 | 30 ms |
 
 Gates: SEO = 100, Performance ≥ 90, Accessibility ≥ 95, Best Practices ≥ 95,
-script transfer ≤ 190 KB, and zero off-origin requests. **All pass.**
+script transfer within the page's own budget, and zero off-origin requests.
+**All pass.**
 
-### The script budget moved once, in M11
+## The script budget, and the two times it moved
+
+### 170 → 190 KB, in M11
 
 It was 170 KB from M6 to M10, and every page sat at 166–169 KB against it.
 The consent layer added **~15 KB transferred to every page** and the gate
@@ -51,9 +55,36 @@ cost.
 
 What was **not** done: shortening the banner's explanation. That prose is the
 part that makes the consent informed, and trading it for bytes would be
-optimising against the point of the feature. So the budget moved to 190 KB
-instead — thin headroom on purpose, because a generous budget catches
-nothing.
+optimising against the point of the feature.
+
+### One budget became four, in M12
+
+M12 put save-for-later, a PIN code delivery estimate and recently-viewed on
+the product page. That page went 185 → 193.7 KB and the gate went red.
+
+The obvious move was to raise 190 to 200. The reason not to is that a single
+number always drifts up to whatever the heaviest page needs — raising it
+would have quietly licensed the home page to grow 13 KB it has no use for.
+So the budget is now **per page**: 190 for home, catalogue and blog, 200 for
+the product page. The pages that stayed light are pinned light.
+
+Before the number moved, the chunk was opened and read:
+
+- The one genuinely avoidable item was the out-of-stock form and the
+  Turnstile widget it pulls in. Both are now behind `next/dynamic` and are
+  **not fetched at all** while a pack is in stock.
+- Deferring the PIN code checker the same way made the page **2 KB heavier**.
+  `next/dynamic` only saves bytes when the component does not render; when it
+  does, the chunk is fetched anyway and the split adds its own wrapper. That
+  is worth knowing before reaching for it again.
+- Search, filters and related products cost **nothing** on the wire. Search
+  is server-rendered, the filter bar reuses server-rendered cards as nodes,
+  and related products are plain server components.
+
+Home, catalogue and blog absorbed M12 inside 190 and stayed there.
+
+Headroom is deliberately thin on every line. A generous budget catches
+nothing, which is the only thing a budget is for.
 
 CLS is 0 on every page, which is the point of reserving space for the variant
 picker and keeping the sticky add-to-cart bar below the fold.
@@ -144,3 +175,6 @@ phones home breaks the build instead of quietly shipping.
 - The budget is measured as script *transfer* size from the Lighthouse
   `network-requests` audit, not `next build` output — Next 16 no longer prints
   First Load JS.
+- `/search` and `/wishlist` are not audited. Both are `noindex` and neither is
+  an entry point; the four pages above are what a visitor and a crawler
+  actually arrive on. Add them if either becomes a landing page.

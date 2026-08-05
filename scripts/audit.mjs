@@ -17,11 +17,19 @@ const outDir = join(process.cwd(), "research", "audits");
 
 mkdirSync(outDir, { recursive: true });
 
+/**
+ * `budgetKb` is transferred script bytes, per page. See SCRIPT_BUDGETS
+ * below for why this is per page rather than one number for the site.
+ */
 const TARGETS = [
-  { name: "home", path: "/" },
-  { name: "catalog", path: "/products" },
-  { name: "product", path: "/products/lakadong-turmeric-powder" },
-  { name: "blog", path: "/blog/what-is-a-gi-tag" },
+  { name: "home", path: "/", budgetKb: 190 },
+  { name: "catalog", path: "/products", budgetKb: 190 },
+  {
+    name: "product",
+    path: "/products/lakadong-turmeric-powder",
+    budgetKb: 200,
+  },
+  { name: "blog", path: "/blog/what-is-a-gi-tag", budgetKb: 190 },
 ];
 
 const THRESHOLDS = {
@@ -32,23 +40,33 @@ const THRESHOLDS = {
 };
 
 /**
- * Transferred script bytes per page.
+ * Transferred script bytes. **Per page, and that is the point.**
  *
- * Raised from 170 to 190 in M11, and the reason is worth recording so the
- * next person does not raise it again by reflex.
+ * It was one number for the whole site until M12, when the product page
+ * needed 200 and the honest choice looked like raising every page to 200 —
+ * which would have quietly licensed the home page to grow 13 KB it has no
+ * use for. A single budget always drifts up to whatever the heaviest page
+ * needs. Per-page numbers keep the pages that stayed light *pinned* light.
  *
- * The consent layer cost ~15 KB transferred on every page: the banner, the
- * footer control that lets a decision be withdrawn, and the store the two
- * share. That is not slack — it is a legally required feature under the DPDP
- * Act 2023, and most of the weight is the copy explaining what each category
- * actually does. Shortening that prose would buy bytes by making the consent
- * less informed, which is optimising precisely the wrong thing.
+ * History, so nobody raises these by reflex:
  *
- * Measured before and after on the same build machine: 166 KB at M10,
- * 181 KB at M11. The headroom left is deliberately thin, because this number
- * exists to catch creep and a generous budget catches nothing.
+ *   170  M6-M10. Every page sat at 166-169.
+ *   190  M11. The consent layer cost ~15 KB on every page — the banner, the
+ *        footer control that withdraws consent, and the store they share.
+ *        Not slack: a DPDP Act requirement, most of it the copy explaining
+ *        what each category does. Shortening that prose would have bought
+ *        bytes by making the consent less informed.
+ *   200  M12, product page only. Save-for-later, the PIN code delivery
+ *        estimate and recently-viewed cost 8.7 KB there (185 -> 193.7).
+ *        The chunk was opened and read before this moved: the one genuinely
+ *        avoidable item, the out-of-stock form plus its Turnstile widget,
+ *        is now behind next/dynamic and is not fetched at all while a pack
+ *        is in stock. Home, catalogue and blog absorbed M12 within 190 and
+ *        stay there.
+ *
+ * Headroom is deliberately thin on every line above. A generous budget
+ * catches nothing, which is the only thing a budget is for.
  */
-const SCRIPT_BUDGET_KB = 190;
 
 const results = [];
 const failures = [];
@@ -128,7 +146,7 @@ for (const target of TARGETS) {
 
   results.push({ ...target, scores, scriptKb, metrics });
   console.log(
-    `perf ${scores.performance} · a11y ${scores.accessibility} · bp ${scores["best-practices"]} · seo ${scores.seo} · ${scriptKb.toFixed(0)} KB js`,
+    `perf ${scores.performance} · a11y ${scores.accessibility} · bp ${scores["best-practices"]} · seo ${scores.seo} · ${scriptKb.toFixed(0)}/${target.budgetKb} KB js`,
   );
 
   for (const [category, minimum] of Object.entries(THRESHOLDS)) {
@@ -138,9 +156,9 @@ for (const target of TARGETS) {
       );
     }
   }
-  if (scriptKb > SCRIPT_BUDGET_KB) {
+  if (scriptKb > target.budgetKb) {
     failures.push(
-      `${target.path}: script transfer ${scriptKb.toFixed(1)} KB > ${SCRIPT_BUDGET_KB} KB budget`,
+      `${target.path}: script transfer ${scriptKb.toFixed(1)} KB > ${target.budgetKb} KB budget`,
     );
   }
 }
@@ -149,7 +167,7 @@ console.log("\n| Page | Perf | A11y | BP | SEO | JS | LCP | CLS | TBT |");
 console.log("|---|---|---|---|---|---|---|---|---|");
 for (const r of results) {
   console.log(
-    `| \`${r.path}\` | ${r.scores.performance} | ${r.scores.accessibility} | ${r.scores["best-practices"]} | ${r.scores.seo} | ${r.scriptKb.toFixed(0)} KB | ${r.metrics.lcp} | ${r.metrics.cls} | ${r.metrics.tbt} |`,
+    `| \`${r.path}\` | ${r.scores.performance} | ${r.scores.accessibility} | ${r.scores["best-practices"]} | ${r.scores.seo} | ${r.scriptKb.toFixed(0)}/${r.budgetKb} KB | ${r.metrics.lcp} | ${r.metrics.cls} | ${r.metrics.tbt} |`,
   );
 }
 

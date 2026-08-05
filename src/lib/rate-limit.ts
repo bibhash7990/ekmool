@@ -79,6 +79,12 @@ export function limitsFor(pathname: string): { limit: number; windowMs: number }
   if (pathname.startsWith("/api/checkout")) {
     return { limit: 10, windowMs: 60_000 };
   }
+  // Takes an email address off a form. Nobody legitimately registers
+  // interest in ten packs a minute, and the cheapest way to make a
+  // subscribe-someone-else nuisance not worth the effort is to make it slow.
+  if (pathname.startsWith("/api/back-in-stock")) {
+    return { limit: 10, windowMs: 60_000 };
+  }
   return { limit: 60, windowMs: 60_000 };
 }
 

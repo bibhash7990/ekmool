@@ -27,6 +27,8 @@ export interface CustomerExport {
   orders: Record<string, unknown>[];
   emailsSent: Record<string, unknown>[];
   returnRequests: Record<string, unknown>[];
+  savedItems: string[];
+  backInStockRequests: Record<string, unknown>[];
 }
 
 /**
@@ -97,6 +99,24 @@ export async function exportCustomerData(
     [normalised],
   );
 
+  const [savedItems] = await pool.execute<RowDataPacket[]>(
+    `SELECT product_slug FROM wishlist_items WHERE customer_id = ?
+      ORDER BY created_at`,
+    [customer ? customer.id : 0],
+  );
+
+  // Keyed on the address rather than on customer_id, because anyone can ask
+  // to be told about a restock without ever having ordered.
+  const [backInStockRequests] = await pool.execute<RowDataPacket[]>(
+    `SELECT v.sku, v.pack_size_label, p.name AS product_name,
+            r.request_count, r.notified_at, r.created_at
+       FROM back_in_stock_requests r
+       JOIN product_variants v ON v.id = r.variant_id
+       JOIN products p ON p.id = v.product_id
+      WHERE r.email = ? ORDER BY r.created_at`,
+    [normalised],
+  );
+
   return {
     exportedAt: new Date().toISOString(),
     customer: customer ? { ...customer } : null,
@@ -104,6 +124,8 @@ export async function exportCustomerData(
     orders: orders.map((row) => ({ ...row })),
     emailsSent: emailsSent.map((row) => ({ ...row })),
     returnRequests: returnRequests.map((row) => ({ ...row })),
+    savedItems: savedItems.map((row) => row.product_slug as string),
+    backInStockRequests: backInStockRequests.map((row) => ({ ...row })),
   };
 }
 
@@ -111,6 +133,8 @@ export interface ErasureResult {
   ordersAnonymised: number;
   addressesDeleted: number;
   customerDeleted: boolean;
+  savedItemsDeleted: number;
+  backInStockDeleted: number;
 }
 
 /**
@@ -135,6 +159,7 @@ export async function eraseCustomer(email: string): Promise<ErasureResult> {
     const customerId = customerRows[0]?.id as number | undefined;
 
     let addressesDeleted = 0;
+    let savedItemsDeleted = 0;
     if (customerId) {
       // Saved addresses are a convenience, not a financial record. They go.
       const [result] = await connection.execute<ResultSetHeader>(
@@ -142,7 +167,26 @@ export async function eraseCustomer(email: string): Promise<ErasureResult> {
         [customerId],
       );
       addressesDeleted = result.affectedRows;
+
+      // The wishlist would cascade when the customer row goes, but deleting
+      // it explicitly is what makes the count reportable — an erasure that
+      // cannot say what it removed is not much of an answer to an erasure
+      // request.
+      const [saved] = await connection.execute<ResultSetHeader>(
+        "DELETE FROM wishlist_items WHERE customer_id = ?",
+        [customerId],
+      );
+      savedItemsDeleted = saved.affectedRows;
     }
+
+    // Back-in-stock rows key on the address, not on customer_id, so nothing
+    // cascades them — and someone who never ordered can still be in here.
+    // Deleted outright rather than anonymised: unlike an order, a request
+    // to be told about a restock is not a record anyone is required to keep.
+    const [backInStock] = await connection.execute<ResultSetHeader>(
+      "DELETE FROM back_in_stock_requests WHERE email = ?",
+      [normalised],
+    );
 
     // The order survives; the person does not. Every column that could name
     // or reach them is overwritten in one statement, so there is no window
@@ -191,6 +235,8 @@ export async function eraseCustomer(email: string): Promise<ErasureResult> {
       ordersAnonymised: orderResult.affectedRows,
       addressesDeleted,
       customerDeleted,
+      savedItemsDeleted,
+      backInStockDeleted: backInStock.affectedRows,
     };
   } catch (error) {
     await connection.rollback();

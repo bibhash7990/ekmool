@@ -2,11 +2,33 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useAppDispatch } from "@/store/hooks";
 import { itemAdded, type CartItem } from "@/store/cart-slice";
 import { Button } from "@/components/ui/Button";
+import { WishlistButton } from "@/components/wishlist/WishlistButton";
+import { PincodeCheck } from "@/components/shipping/PincodeCheck";
 import { formatPaise } from "@/lib/money";
 import { track } from "@/lib/analytics";
+
+/**
+ * Deferred because it is markup for a state that is almost always false —
+ * and it drags the Turnstile widget and next/script in with it. Charging
+ * every product page view for the one case where a pack has run out is
+ * backwards. Server rendering stays on, so when a pack *is* out of stock
+ * the form is in the prerendered HTML and only its behaviour arrives late.
+ *
+ * Worth knowing before reaching for this again: **`next/dynamic` only saves
+ * bytes when the component does not render.** It was tried on the PIN code
+ * checker too, which is on every product page, and the page got 2 KB
+ * *heavier* — the chunk is requested anyway and the split adds its own
+ * wrapper. Deferring something that renders buys a round trip, not a
+ * saving. This one earns it because `outOfStock` is normally false and the
+ * chunk is then never asked for at all.
+ */
+const BackInStockForm = dynamic(() =>
+  import("./BackInStockForm").then((module) => module.BackInStockForm),
+);
 
 export interface PurchaseVariant {
   id: number;
@@ -32,11 +54,13 @@ export function ProductPurchase({
   productName,
   accent,
   variants,
+  turnstileSiteKey = "",
 }: {
   productSlug: string;
   productName: string;
   accent: "gold" | "terracotta" | "green";
   variants: PurchaseVariant[];
+  turnstileSiteKey?: string;
 }) {
   const dispatch = useAppDispatch();
   const [selectedId, setSelectedId] = useState(variants[0]?.id ?? 0);
@@ -150,7 +174,7 @@ export function ProductPurchase({
           </p>
         </div>
 
-        <div className="mt-7 flex flex-wrap items-center gap-4">
+        <div className="mt-7 flex flex-wrap items-center gap-3">
           <div className="flex items-center border border-ek-green-200">
             <button
               type="button"
@@ -181,6 +205,12 @@ export function ProductPurchase({
           <Button size="lg" onClick={addToCart} disabled={outOfStock}>
             {outOfStock ? "Out of stock" : "Add to cart"}
           </Button>
+
+          <WishlistButton
+            slug={productSlug}
+            productName={productName}
+            variant="inline"
+          />
         </div>
 
         <div className="mt-4 min-h-6 text-15" aria-live="polite">
@@ -198,6 +228,20 @@ export function ProductPurchase({
             </p>
           )}
         </div>
+
+        {/* Keyed to the variant so switching packs resets a submitted form:
+            "we will tell you about the 250 g" must not survive a click onto
+            the 100 g. */}
+        {outOfStock && (
+          <BackInStockForm
+            key={selected.id}
+            variantId={selected.id}
+            packLabel={selected.packSizeLabel}
+            turnstileSiteKey={turnstileSiteKey}
+          />
+        )}
+
+        <PincodeCheck className="mt-8 border-t border-ek-green-200 pt-7" />
       </div>
 
       {/* Mobile sticky bar — fixed, so it never causes layout shift */}

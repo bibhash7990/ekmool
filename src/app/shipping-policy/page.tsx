@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PolicyPage, PolicySection } from "@/components/legal/PolicyPage";
+import { DELIVERY_ZONES, DISPATCH_DAYS } from "@/lib/serviceability";
 
 export const metadata: Metadata = {
   title: "Shipping Policy — Delivery Times & Charges",
@@ -48,18 +49,28 @@ export default function ShippingPolicy() {
           the next working day.
         </p>
         <p>Typical transit time after dispatch:</p>
+        {/* Rendered from lib/serviceability.ts, which is the same table the
+            PIN code checker on a product page reads. A policy and a widget
+            quoting different numbers is how a shop ends up with a promise
+            it did not know it had made. */}
         <ul>
-          <li>Metro cities — 2 to 4 working days</li>
-          <li>Other cities and towns — 4 to 7 working days</li>
-          <li>
-            Remote PIN codes, hill districts and the North East — 6 to 10
-            working days
-          </li>
+          {Object.values(DELIVERY_ZONES).map((zone) => (
+            <li key={zone.id}>
+              {zone.label} — {zone.minDays} to {zone.maxDays} working days
+            </li>
+          ))}
         </ul>
+        <p>
+          The PIN code checker on any product page adds the {DISPATCH_DAYS}{" "}
+          working day for packing and gives you the total, so the figure it
+          shows is from the moment you order rather than from dispatch.
+        </p>
         <p>
           These are courier estimates, not guarantees. Weather, festival
           season, strikes and regional restrictions can extend them, and we
-          will tell you if we know a delay is coming.
+          will tell you if we know a delay is coming. Where a PIN code range
+          covers both plains and hills we quote the slower band, so an
+          estimate is more likely to be beaten than missed.
         </p>
       </PolicySection>
 

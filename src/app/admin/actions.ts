@@ -10,6 +10,7 @@ import {
 } from "@/db/queries/admin";
 import { getOrderById } from "@/db/queries/orders";
 import { buildOrderShippedEmail } from "@/emails/order-shipped";
+import { notifyBackInStock } from "@/lib/back-in-stock";
 import { sendAndLog } from "@/lib/mail";
 import { revalidateCatalog } from "@/lib/revalidate";
 import { appUrl } from "@/lib/env";
@@ -114,18 +115,41 @@ export async function updateStockAction(
   }
 
   try {
-    const updated = await setVariantStock(
+    const result = await setVariantStock(
       parsed.data.variantId,
       parsed.data.stockQty,
     );
-    if (!updated) return { ok: false, message: "Variant not found" };
+    if (!result.updated) return { ok: false, message: "Variant not found" };
 
     // An admin edit is exactly the case where purging the catalogue is
     // correct: it is rare, deliberate, and should show up immediately.
     revalidateCatalog();
     revalidatePath("/admin/stock");
 
-    return { ok: true, message: `Stock set to ${parsed.data.stockQty}.` };
+    // Nothing to something: the pack is back, so tell the people who asked.
+    // Awaited rather than fired and forgotten, because the owner needs the
+    // count in the reply — "stock set to 40" with no mention of the twelve
+    // emails it just sent is a surprise waiting to happen.
+    let notified = "";
+    if (result.previous === 0 && result.next > 0) {
+      try {
+        const { sent } = await notifyBackInStock(parsed.data.variantId);
+        if (sent > 0) {
+          notified = ` ${sent} waiting ${sent === 1 ? "customer" : "customers"} notified.`;
+        }
+      } catch (error) {
+        // The stock change is committed and correct; a mail failure must
+        // not report it as one. The queue is untouched, so the next
+        // restock — or a retry — picks it up.
+        console.error("[admin] back-in-stock notification failed:", error);
+        notified = " Stock saved, but the waiting-list email did not send.";
+      }
+    }
+
+    return {
+      ok: true,
+      message: `Stock set to ${parsed.data.stockQty}.${notified}`,
+    };
   } catch (error) {
     console.error("[admin] stock update failed:", error);
     return { ok: false, message: "Could not update stock. Try again." };

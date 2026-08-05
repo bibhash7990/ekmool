@@ -5,7 +5,12 @@ import { useEffect, useState } from "react";
 import { MenuIcon, CloseIcon } from "@/components/icons";
 import { ACCOUNT_LINK, NAV_LINKS } from "@/lib/constants";
 
-export function MobileNav() {
+/**
+ * `children` is the search form, handed in from the (server) Header rather
+ * than imported here — importing it would drag its markup into the client
+ * bundle for a form that has no client behaviour.
+ */
+export function MobileNav({ children }: { children?: React.ReactNode }) {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -49,6 +54,8 @@ export function MobileNav() {
               <CloseIcon className="size-6" />
             </button>
           </div>
+          {children && <div className="px-5 pt-6">{children}</div>}
+
           <nav aria-label="Mobile" className="px-5 py-6">
             <ul className="flex flex-col">
               {[...NAV_LINKS, ACCOUNT_LINK].map((link) => (

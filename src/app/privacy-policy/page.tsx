@@ -31,6 +31,24 @@ export default function PrivacyPolicy() {
           receipt without it. There is no optional profiling data on our
           checkout form.
         </p>
+        <p>Two other things you can choose to give us:</p>
+        <ul>
+          <li>
+            <strong>Saved items.</strong> The heart on a product keeps it in
+            your own browser. It is copied to your account only once you have
+            looked up an order, and only so the list survives a new phone.
+          </li>
+          <li>
+            <strong>A back-in-stock request.</strong> If you ask to be told
+            when a sold-out pack returns, we hold your email address against
+            that pack until we have written to you once. It is not a mailing
+            list and it does not become one.
+          </li>
+        </ul>
+        <p>
+          Recently viewed products are kept entirely in your own browser. That
+          list is never sent to us, so we cannot see it, store it or lose it.
+        </p>
       </PolicySection>
 
       <PolicySection heading="What we deliberately do not collect">

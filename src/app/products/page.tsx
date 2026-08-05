@@ -1,12 +1,14 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 
 import { getCatalog } from "@/db/queries/products";
 import { getProductContent } from "@/content/products";
+import { familyOf } from "@/lib/related";
 import { ProductCard } from "@/components/product/ProductCard";
+import { CatalogGrid, type CatalogItem } from "@/components/product/CatalogGrid";
 import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
 import { Eyebrow } from "@/components/ui/Eyebrow";
 import { SoilLine } from "@/components/ui/SoilLine";
-import { Reveal } from "@/components/ui/Reveal";
 import { TrustStrip } from "@/components/home/TrustStrip";
 
 export const revalidate = 3600;
@@ -27,6 +29,29 @@ export const metadata: Metadata = {
 export default async function ProductsPage() {
   const products = await getCatalog();
 
+  // Cards are rendered here, on the server, and handed to the client grid
+  // as nodes. The grid decides what to show; it never rebuilds a card.
+  const items: CatalogItem[] = products.map((product) => {
+    const content = getProductContent(product.slug);
+    return {
+      slug: product.slug,
+      name: product.name,
+      family: familyOf(product),
+      originState: product.originState,
+      packLabels: product.variants.map((v) => v.packSizeLabel),
+      fromPaise: Math.min(...product.variants.map((v) => v.pricePaise)),
+      node: (
+        <ProductCard
+          product={product}
+          artDirection={
+            content?.heroArtDirection ??
+            `Product photography for ${product.name}: overhead, warm natural light, regional props only.`
+          }
+        />
+      ),
+    };
+  });
+
   return (
     <div className="mx-auto max-w-[1180px] px-5 py-10 lg:px-8 lg:py-14">
       <Breadcrumbs items={[{ href: "/products", label: "Shop" }]} />
@@ -45,22 +70,25 @@ export default async function ProductsPage() {
 
       <SoilLine align="left" className="my-12 max-w-sm" />
 
-      <ul className="grid gap-x-8 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
-        {products.map((product, i) => {
-          const content = getProductContent(product.slug);
-          return (
-            <Reveal as="li" key={product.slug} index={i} className="h-full">
-              <ProductCard
-                product={product}
-                artDirection={
-                  content?.heroArtDirection ??
-                  `Product photography for ${product.name}: overhead, warm natural light, regional props only.`
-                }
-              />
-            </Reveal>
-          );
-        })}
-      </ul>
+      {/*
+        useSearchParams needs a Suspense boundary for the page to prerender.
+        The fallback is the full, unfiltered grid — so the static HTML a
+        crawler or a JS-less browser gets is every product, which is exactly
+        what /products should be when nothing has been chosen.
+      */}
+      <Suspense
+        fallback={
+          <ul className="grid gap-x-8 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
+            {items.map((item) => (
+              <li key={item.slug} className="h-full">
+                {item.node}
+              </li>
+            ))}
+          </ul>
+        }
+      >
+        <CatalogGrid items={items} />
+      </Suspense>
 
       <div className="mt-20 border-t border-ek-green-200 pt-10">
         <TrustStrip className="max-w-3xl" />

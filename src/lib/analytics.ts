@@ -11,7 +11,11 @@ export type AnalyticsEvent =
   | "add_to_cart"
   | "begin_checkout"
   | "purchase_completed"
-  | "payment_failed";
+  | "payment_failed"
+  | "search_performed"
+  | "wishlist_added"
+  | "wishlist_removed"
+  | "back_in_stock_requested";
 
 type Props = Record<string, string | number | boolean | undefined>;
 

@@ -142,3 +142,40 @@ export function CloseIcon({ className }: IconProps) {
     </Svg>
   );
 }
+
+/** Search — the loupe, drawn on the same 24 grid as the rest. */
+export function SearchIcon({ className }: IconProps) {
+  return (
+    <Svg className={className}>
+      <circle cx="11" cy="11" r="6.25" />
+      <path d="M15.6 15.6L20 20" />
+    </Svg>
+  );
+}
+
+/**
+ * Wishlist. Takes `filled` rather than shipping two icons, because the
+ * saved and unsaved states have to be the same shape in the same place —
+ * a heart that changes outline is a state change, a heart that changes
+ * silhouette is a different control.
+ */
+export function HeartIcon({
+  className,
+  filled = false,
+}: IconProps & { filled?: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill={filled ? "currentColor" : "none"}
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+      className={className}
+    >
+      <path d="M12 20s-7.2-4.35-7.2-9.3A4.2 4.2 0 0 1 12 8.1a4.2 4.2 0 0 1 7.2 2.6c0 4.95-7.2 9.3-7.2 9.3z" />
+    </svg>
+  );
+}

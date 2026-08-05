@@ -118,10 +118,11 @@ All of these run against a live server and a live database, so start one first
 | `npm run test:account` | Order lookup, enumeration resistance, session scoping, cancellation, the account area |
 | `npm run test:commerce` | GST arithmetic and the split, invoice numbering, returns windows, re-order, prefill |
 | `npm run test:consent` | Security headers, that nothing tracks before consent, the grievance notice, the honeypot |
+| `npm run test:discovery` | Search ranking and synonyms, filters, PIN code estimates, wishlist scoping, back-in-stock |
 | `npm run test:db-down` | Browsing with MySQL stopped (stop it first) |
 | `npm run test:jobs` | Cron authorisation, stale-order cancel, reminder dedupe |
 | `npm run validate:schema` | Titles, descriptions, canonicals, JSON-LD, internal links |
-| `npm run audit` | Lighthouse gates: SEO 100, Perf ≥90, A11y ≥95, BP ≥95, JS ≤190 KB |
+| `npm run audit` | Lighthouse gates: SEO 100, Perf ≥90, A11y ≥95, BP ≥95, JS per page (190 KB; 200 on the product page) |
 | `npm run loadtest` | k6 browse + checkout load, verified against the database |
 | `npm run chaos` | Kills MySQL under live traffic and checks what survives |
 
@@ -212,6 +213,42 @@ All of these run against a live server and a live database, so start one first
   column that could name someone and leaves the transaction. The UI says
   exactly that before you confirm — telling someone their data is gone while
   the row survives would be the actual violation.
+- **Search does not touch the database, and there is no FULLTEXT index.**
+  Matching runs in memory over the same hourly-cached catalogue every
+  browsing page reads, so a search costs no query and still works while
+  MySQL is down. The reason is not performance: a FULLTEXT index cannot
+  match "haldi" to turmeric, "mirchi" to chilli or "fox nut" to makhana,
+  and that synonym table in `src/lib/search.ts` *is* the feature. Revisit at
+  a few thousand products.
+- **Rank on exact hits, count prefix hits separately.** Pack labels
+  tokenise to `["100", "g"]`, so every product owned a one-character token
+  and `"guntur".startsWith("g")` matched the entire catalogue. Both sides of
+  a prefix comparison now have a minimum length, and a prefix hit adds to
+  the score without counting as a match — otherwise two weak hits outrank
+  one exact hit on the product's own name.
+- **`/products` filters on the client, on purpose.** Reading `searchParams`
+  in the server component would opt the page into dynamic rendering, and
+  static browsing is the entire load story. The cards are rendered on the
+  server and handed to `CatalogGrid` as nodes, so the card never becomes a
+  client component; only the *choosing* is client-side, behind a Suspense
+  boundary whose fallback is the full unfiltered shelf.
+- **One delivery table, two readers.** `src/lib/serviceability.ts` holds the
+  transit bands, and `/shipping-policy` renders from it rather than
+  restating them. A checker quoting "3–5 days" beside a policy saying "4 to
+  7" turns the policy into a lie nobody notices until a customer quotes it
+  back. Where a PIN prefix covers both plains and hills, the slower band
+  wins — an estimate that runs long is a pleasant surprise.
+- **`next/dynamic` only saves bytes when the component does not render.**
+  It earns its place on the back-in-stock form, which is markup for a state
+  that is usually false. Tried on the PIN code checker, which is on every
+  product page, it made the page 2 KB *heavier*: the chunk is fetched
+  anyway and the split adds its own wrapper.
+- **The wishlist merges on arrival and replaces thereafter.** Both the
+  browser's list and the server's are real, so opening `/wishlist` unions
+  them; removals made while on that page replace, or a union would put back
+  what was just taken out. A session whose customer row is gone answers
+  `401`, exactly as a guest does — it used to answer `200 {slugs: []}`, and
+  the page read that as a completed merge and wiped the local list.
 - **Parameterised SQL only**, secrets only via env.
 - **Never fabricate social proof.** There are no ratings, no review counts, and
   scarcity messaging appears only when the stock number is literally true. The

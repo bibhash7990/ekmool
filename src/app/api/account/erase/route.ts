@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
         ok: true,
         ...result,
         message:
-          "Your account and saved addresses are gone. Past orders remain as anonymous records — tax law requires the transactions to be kept — but they no longer carry your name, email, phone or street address.",
+          "Your account, saved addresses, saved items and any back-in-stock requests are gone. Past orders remain as anonymous records — tax law requires the transactions to be kept — but they no longer carry your name, email, phone or street address.",
       },
       { status: 200, headers: { "cache-control": "no-store" } },
     );

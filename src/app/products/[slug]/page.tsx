@@ -5,6 +5,7 @@ import Link from "next/link";
 import { getCatalog, getProductBySlug } from "@/db/queries/products";
 import { getProductContent, PRODUCT_CONTENT } from "@/content/products";
 import { appUrl } from "@/lib/env";
+import { turnstileSiteKey } from "@/lib/turnstile";
 import { formatPaise, paiseToRupees } from "@/lib/money";
 
 import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
@@ -16,6 +17,8 @@ import { TrustStrip } from "@/components/home/TrustStrip";
 import { OriginLabel, AccentRule } from "@/components/product/OriginLabel";
 import { ProductPurchase } from "@/components/product/ProductPurchase";
 import { ProductFaqList } from "@/components/product/ProductFaq";
+import { RelatedProducts } from "@/components/product/RelatedProducts";
+import { RecentlyViewed } from "@/components/product/RecentlyViewed";
 
 export const revalidate = 3600;
 export const dynamicParams = false;
@@ -115,7 +118,8 @@ export default async function ProductPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const product = await getProductBySlug(slug);
+  const catalog = await getCatalog();
+  const product = catalog.find((entry) => entry.slug === slug) ?? null;
   const content = getProductContent(slug);
   if (!product || !content) notFound();
 
@@ -213,6 +217,7 @@ export default async function ProductPage({
                 productName={product.name}
                 accent={product.accent}
                 variants={product.variants}
+                turnstileSiteKey={turnstileSiteKey}
               />
             </div>
 
@@ -283,6 +288,23 @@ export default async function ProductPage({
             <ProductFaqList faq={content.faq} headingId="faq-heading" />
           </div>
         </section>
+
+        <SoilLine className="my-16 lg:my-24" />
+
+        <RelatedProducts catalog={catalog} current={product} />
+
+        {/* Slugs only, held in the visitor's own browser — see
+            src/lib/recently-viewed.ts. The names and prices come from this
+            server render, so nothing here can go stale. */}
+        <RecentlyViewed
+          currentSlug={product.slug}
+          catalog={catalog.map((entry) => ({
+            slug: entry.slug,
+            name: entry.name,
+            originState: entry.originState,
+            fromPaise: Math.min(...entry.variants.map((v) => v.pricePaise)),
+          }))}
+        />
       </div>
 
       {/* Padding so the sticky mobile bar never covers page content */}

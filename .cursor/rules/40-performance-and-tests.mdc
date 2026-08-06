@@ -1,0 +1,75 @@
+---
+description: Script budget, caching, and how the test suites work. Read when touching bundle size, images, or tests.
+globs: scripts/**/*.mjs,scripts/**/*.mts,next.config.ts,public/sw.js,.github/workflows/*.yml
+alwaysApply: false
+---
+
+# Performance and tests
+
+Full detail: `docs/PERFORMANCE.md` and `docs/CONTRIBUTING.md`.
+
+Target user: mid-range Android on 4G in an Indian city, sometimes 3G on a
+train. JavaScript is the expensive thing.
+
+## The budget, enforced by `npm run audit`
+
+| Page | Script | Perf | A11y | BP | SEO |
+|---|---|---|---|---|---|
+| `/`, `/products`, `/blog/[slug]` | ≤ 190 KB | ≥ 90 | 100 | 100 | 100 |
+| `/products/[slug]` | ≤ 200 KB | ≥ 90 | 100 | 100 | 100 |
+
+Currently 178 / 181 / 184 / 176. **Headroom is thin on purpose** — a
+generous budget catches nothing.
+
+The audit also fails on any off-origin request and on any script served by
+the service worker, because a cached response has `transferSize: 0` and a
+warm cache would hide a regression.
+
+## Spending bytes well
+
+- Server components by default; `"use client"` at the smallest leaf.
+- Render content on the server, pass it as a `node` prop.
+- **`next/dynamic` only helps when the component usually does *not*
+  render.** Measured both ways here: it saved real bytes on
+  `ReviewComposer` (behind a button) and made the product page *heavier*
+  when applied to the PIN checker (renders every time). Measure with
+  `npm run audit` before and after; do not reason about it.
+- The cart is localStorage, not IndexedDB. IndexedDB earns its place in the
+  service-worker layer and nowhere else.
+
+## Queries and images
+
+One round trip where one will do — `loadCatalog` is three queries for the
+whole catalogue, not N+1. `LIMIT` everything that could grow. Never
+`SELECT *` in application code.
+
+`next/image` with width and height; CLS is 0 on all four audited pages and
+stays there. WebP or AVIF; SVG uploads are refused.
+
+## Service worker
+
+`public/sw.js`, hand-written, no Workbox. Static cache-first (hashed URLs,
+so stale is impossible), images stale-while-revalidate, navigations
+network-first with a 3.5s timeout. **Never** `/api`, `/admin`, `/checkout`,
+`/orders`, `/account`, `/track` — the Cache API outlives the tab, and a
+cached order page is a privacy leak on a shared phone. GET only.
+
+## Tests
+
+A plain script per area — no framework. Each prints `PASS`/`FAIL` and exits
+non-zero. They run against a live server and a live database, because that
+is where the bugs are.
+
+- **Write the assertion so it would fail.** A test that passes against
+  broken code buys confidence that is not there.
+- Clean up: every suite deletes its own rows and asserts it left nothing.
+- Name assertions in English, describing the property: `check("editing a
+  pack does not touch its stock", after === before)`.
+- Suites are **not parallel-safe** — they share a rate limiter. If a suite
+  must burn a bucket, give it its own `x-real-ip`.
+- Run `test:db-down` from a warm cache, not straight after `chaos` or
+  `test:admin`.
+
+`test:admin` imports the real query modules through the `@/` resolve hook in
+`scripts/alias-loader.mjs`, so it exercises the SQL the application runs
+rather than SQL written in the test.

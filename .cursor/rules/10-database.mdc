@@ -1,0 +1,63 @@
+---
+description: SQL, migrations, money, concurrency. Applies to database code.
+globs: src/db/**/*.ts,src/db/**/*.sql
+alwaysApply: false
+---
+
+# Database
+
+Full detail: `docs/DATABASE.md`.
+
+MySQL 8.4, InnoDB, `utf8mb4_0900_ai_ci`. Raw `mysql2/promise`, no ORM —
+every query that matters is one an ORM would fight.
+
+## Non-negotiable
+
+- **Parameterised SQL.** `LIMIT` is the only interpolation, after
+  `Math.min(Math.max(Math.floor(n), 1), max)`, with the reason in a comment.
+- **Money is `INT UNSIGNED` paise** with `COMMENT 'paise'`. Rates are basis
+  points — 5% is `500`. No floats near money.
+- **Nothing sold is deleted.** `order_items.variant_id` is
+  `ON DELETE SET NULL`, so a delete detaches history instead of failing.
+  Archive with `is_active = 0`. Orders are anonymised on erasure, never
+  removed — they are financial records.
+- **Migrations only move forward.** `NNN_name.sql`, recorded in
+  `_migrations`. No down migrations; write a new file. Open each with a
+  comment block explaining *why*.
+
+## Concurrency
+
+Read-then-write across an `await` is a race. Use:
+
+```sql
+-- atomic decrement with a guard: what actually prevents overselling
+UPDATE product_variants SET stock_qty = stock_qty - ?
+ WHERE id = ? AND stock_qty >= ?
+```
+
+`SELECT … FOR UPDATE` where a value must be read and written as one step
+(coupon claims, invoice counters, stock edits that need the previous value).
+
+**Lock order is fixed: variant rows → coupon row → customer upsert.** Any
+transaction touching more than one takes them in that order.
+
+Unique indexes are the real guard; the application check is the friendly
+path. Catch `ER_DUP_ENTRY` and translate it.
+
+## Gotchas that have bitten
+
+- `GROUP_CONCAT` truncates at 1024 bytes, silently. Join in JavaScript.
+- `TIMESTAMP` comes back in the session time zone (UTC in Docker). Group
+  reports with the `IST()` helper in `src/db/queries/reports.ts`;
+  `CONVERT_TZ` returns NULL without the tz tables, which the official image
+  does not ship.
+- A slug is snapshotted onto every order line and keyed on by reviews and
+  wishlists. `updateProduct` refuses to rename one that is referenced.
+
+## Shape of a query module
+
+`import "server-only"`, a `RowDataPacket` interface for the row, a clean
+exported interface, and an **explicit** mapper between them. Transactions
+use `getConnection()` with `try/catch/finally` that rolls back and always
+releases — a leaked connection is a pool exhaustion an hour later with no
+stack trace pointing at you.

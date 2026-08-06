@@ -1,0 +1,79 @@
+---
+description: Route handlers, server actions, auth, validation, rate limits, caching. Applies to server-side code.
+globs: src/app/api/**/*.ts,src/app/**/actions.ts,src/app/**/*-actions.ts,src/lib/**/*.ts,src/proxy.ts,instrumentation.ts
+alwaysApply: false
+---
+
+# Server
+
+Full detail: `docs/SECURITY.md` and `docs/ARCHITECTURE.md`.
+
+## Every route handler and server action
+
+1. **Auth first.** `requireAdmin()` for admin (404s, never 403s, so the
+   surface is invisible). `requireAccount()` for customer data.
+2. **Zod second.** Validate the whole input. The client validates with the
+   same schema for the message, never for the decision.
+3. **Then call a query function.** Never write SQL here.
+4. **Never trust client money.** The checkout transaction recomputes
+   everything from rows it holds a lock on. The cart sends variant ids and
+   quantities; a coupon sends its code.
+
+## Scope to the session, never to a parameter
+
+```ts
+const { email } = await requireAccount();       // signed cookie
+const orders = await listOrdersByEmail(email);  // never req.query.email
+```
+
+Include `customer_id` in the `WHERE` even where the row id alone is unique
+— it makes "only your own" a property of the query.
+
+Order lookup uses `timingSafeEquals`, and a wrong email and a wrong
+reference return **the same message**. A different one is an oracle.
+
+## Environment
+
+`src/lib/env.ts` is the only server-side reader of `process.env`, and it
+validates prefixes and formats. A value matching `placeholder|changeme|your-`
+counts as absent. Add a capability flag rather than checking a variable at
+the call site, and add the variable to `.env.example` with a comment.
+
+## Caching
+
+- `unstable_cache` with a tag; two tags exist — `products` and `reviews` —
+  and they are separate so moderating a review does not purge the
+  catalogue.
+- **Never `revalidatePath` a product route.** Tag only.
+- A purge marks stale and serves the old copy while regenerating; it does
+  not rebuild.
+- Purges are announced over Redis so every replica applies them. Anything
+  new that purges should go through `src/lib/revalidate.ts`.
+- **Never revalidate from the checkout path** — it discards the copy that
+  would be served during an outage.
+
+## Rate limits
+
+`src/proxy.ts`. 5/min lookup, 10/min checkout, 10/min back-in-stock, 60/min
+otherwise; health and the payment webhook are exempt. Buckets are
+per-process without `REDIS_URL`.
+
+## Errors
+
+Return the contract code the client already handles —
+`DB_UNAVAILABLE`, `INSUFFICIENT_STOCK`, `VALIDATION_FAILED`,
+`RATE_LIMITED`. A database outage is a **503**, never a 500. Log the cause
+server-side; never leak it to the client.
+
+## Redis
+
+`enableOfflineQueue: false` on the command connection — the default buffers
+commands while Redis is down and would hang a checkout instead of erroring
+it. `true` on the subscriber, whose one SUBSCRIBE lands before the socket is
+up. Redis unavailable falls back to the in-memory bucket, not to no limit.
+
+## Audit
+
+Every admin write calls `recordAdminAction` — actor, action, entity,
+before/after. It never throws. Never put a secret, a token or a customer's
+address in it.

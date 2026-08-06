@@ -1,0 +1,86 @@
+---
+description: Design tokens, components, accessibility and copy voice. Applies to pages and components.
+globs: src/app/**/*.tsx,src/components/**/*.tsx,src/app/globals.css
+alwaysApply: false
+---
+
+# UI
+
+Full detail: `docs/DESIGN-SYSTEM.md`. Tokens live in `src/app/globals.css`
+under Tailwind v4's `@theme`.
+
+Editorial, not e-commerce-template: generous type, a lot of paper, one
+accent used sparingly.
+
+## Tokens only
+
+Utilities, never hex. `bg-ek-paper`, `text-ek-green-900`,
+`border-ek-green-200`.
+
+- Ink: `ek-green-900`. Body: `ek-green-700`. Page: `ek-paper` — **never
+  pure white**.
+- **`gold-800` is the only gold that passes 4.5:1 as ink.** `gold-500` and
+  `gold-600` are fills only. This is the likeliest way to lose the
+  accessibility 100.
+- `ek-terracotta` is the chilli accent and error text.
+
+## Type
+
+Display **Marcellus 400 only** — hierarchy from size, tracking and case,
+never synthesised weight. Body Figtree.
+
+`text-64` (home hero only) · `text-46` · `text-34` · `text-26` · `text-20`
+lead · `text-17` body · `text-15` secondary. **Nothing smaller than
+`text-15`.** Line heights are in the tokens; do not override.
+
+Prose never exceeds `max-w-[70ch]`; body usually sits at 52–68ch.
+
+## Layout
+
+Container `mx-auto max-w-[1180px] px-5 lg:px-8`, or `720px` for prose.
+Sections `py-16 lg:py-24`, or `py-20 lg:py-28` to breathe.
+
+**Asymmetry is the house style** — `lg:grid-cols-[1.05fr_0.95fr]`, not
+`1fr 1fr`. An even split reads as a template.
+
+`<SoilLine />` between major sections, never inside one.
+
+## Components before divs
+
+`Button` / `ButtonLink`, `Eyebrow` (`as="h2"` when it is the heading),
+`SoilLine`, `Reveal`, `PhotoPlaceholder`, `GIChip`, `Breadcrumbs`.
+
+`PhotoPlaceholder` carries the **art direction** for the shot that belongs
+there. There is no stock photography in this project, deliberately.
+
+## Server components by default
+
+`"use client"` has a byte cost against a tight budget. Push interactivity to
+the smallest leaf. Need rich content inside a client component? Render it on
+the server and pass it as a `node` prop.
+
+## Accessibility — the gate is 100
+
+- 4.5:1 on body text; never remove a focus ring.
+- `min-h-11` on every button, link-button and input — 44×44 minimum.
+- Every input has a **visible** `<label>`; a placeholder is not a label.
+- Errors next to the field, not only summarised at the top.
+- One `<h1>`; heading levels do not skip.
+- `aria-label` on icon-only buttons, `role="status"` on status messages,
+  `aria-hidden` on decorative SVG.
+- A keyboard path for everything. Drag-to-reorder also has ↑/↓ buttons
+  because native HTML5 drag is mouse-only.
+
+## Motion
+
+150–300ms, and it must mean something. Colour and opacity only — never
+`width`, `height`, `top`, `left`. Everything respects
+`prefers-reduced-motion`.
+
+## Copy
+
+Plain, specific, unhurried. **Never fabricate social proof.** Say what
+happens next — "Waiting to be sent", not "Thank you for your order", when
+it has not been sent. Refusals give the rule. No exclamation marks. Indian
+English and formats: ₹ with `en-IN` grouping, IST. FSSAI-safe: no disease,
+cure or treatment claims.

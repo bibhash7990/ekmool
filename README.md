@@ -157,8 +157,19 @@ section 1b asserts.
 
 ## Documentation
 
+**Start at [docs/README.md](docs/README.md).** New here? Read
+[CONTRIBUTING](docs/CONTRIBUTING.md), then
+[ARCHITECTURE](docs/ARCHITECTURE.md), then the document for whatever you
+are touching.
+
 | | |
 |---|---|
+| [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) | Setup, the twelve non-negotiable rules, definition of done |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Rendering strategy, caching, module boundaries, graceful degradation |
+| [docs/DATABASE.md](docs/DATABASE.md) | Schema conventions, migrations, money, concurrency, lock order |
+| [docs/DESIGN-SYSTEM.md](docs/DESIGN-SYSTEM.md) | Colour, type, space, components, accessibility, copy voice |
+| [docs/PERFORMANCE.md](docs/PERFORMANCE.md) | The script budget and how not to spend it, caching layers |
+| [docs/SECURITY.md](docs/SECURITY.md) | Secrets, auth, input, rate limits, headers, uploads, DPDP |
 | [docs/docker.md](docs/docker.md) | The one-command stack, the edge profile, deploying it |
 | [docs/keys-needed.md](docs/keys-needed.md) | What to sign up for, in what order, and what each unlocks |
 | [docs/deploy.md](docs/deploy.md) | Vercel and VPS paths, CDN cache rules, cron, email DNS |

@@ -1,0 +1,70 @@
+---
+description: Ekmool project rules — always applies. The non-negotiables, the shape of the codebase, and where the full documentation lives.
+alwaysApply: true
+---
+
+# Ekmool
+
+D2C storefront for five GI-tagged single-origin Indian foods. Next.js 16 ·
+React 19 · Tailwind v4 · MySQL 8 · TypeScript strict.
+
+Full documentation: `docs/README.md`. Read `docs/ARCHITECTURE.md` before
+writing code.
+
+## The twelve rules
+
+1. TypeScript strict. **No `any` on an exported surface.**
+2. **Parameterised SQL only.** The single exception is `LIMIT`, which MySQL
+   rejects as a placeholder — clamp it to an integer and say why at the
+   call site.
+3. **Secrets only from the environment.** No placeholder credentials
+   anywhere.
+4. **Money is integer paise.** Rupees only in admin forms and CSV exports,
+   converted in one place with `Math.round(rupees * 100)`.
+5. **Never fabricate social proof.** No seeded reviews, no invented
+   ratings, no urgency counter that is not literally true from stock. A
+   product with no reviews shows no rating — not a zero.
+6. **Design tokens only.** A hardcoded hex in a component is a review
+   failure.
+7. **Guest checkout never requires login.** There is no registration.
+8. **Browsing never touches the database.** The home page, catalogue,
+   product pages and blog are static; `npm run chaos` asserts they serve
+   200s with MySQL stopped.
+9. **Never `revalidatePath` a product route** — use
+   `revalidateTag(PRODUCTS_TAG)`.
+10. **Nothing that has been sold is deleted.** Archive it.
+11. **Accessibility stays at 100.**
+12. **Ask before adding a dependency.**
+
+## Shape
+
+- `src/app/` routes only · `src/components/` UI, server by default
+- `src/db/queries/` **the only place SQL is written** ·
+  `src/db/migrations/` forward-only numbered `.sql`
+- `src/lib/` money, gst, coupons, search, session, redis, storage, csv
+- `src/content/` editorial copy · `src/store/` the client cart only
+
+Server modules import `"server-only"`. `src/lib/env.ts` is the only
+server-side reader of `process.env`. Server actions validate with Zod, then
+call a query function — they do not write SQL.
+
+## Graceful degradation
+
+The site must build, run and take Cash on Delivery orders with **zero
+third-party keys**. Every integration degrades to a documented inert state.
+No Clerk → `/admin` 404s. No Razorpay → COD only. No SMTP → mail logged as
+`skipped_no_smtp`. No GSTIN → pro-forma invoices, no GST collected. No
+Redis → per-process rate buckets. No object storage → image paths.
+
+## Done means
+
+`npm run typecheck && npm run lint`, the suite covering what you touched,
+and `npm run audit` — SEO 100, accessibility 100, script budget held
+(190 KB per page, 200 on the product page).
+
+## Habits
+
+Comments explain **why**, and name the alternative rejected. Measure before
+claiming something is faster. Write assertions that would fail. Copy is
+plain and names the rule: "That code needs a basket of at least ₹500", not
+"Invalid code".

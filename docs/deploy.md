@@ -262,9 +262,100 @@ one state change ([loadtest.md](loadtest.md)) — so Razorpay's retries are safe
 
 ---
 
+## Backups
+
+The `backup` compose service dumps the database nightly at 03:00 IST,
+gzips it, **verifies it**, and keeps `BACKUP_KEEP_DAYS` of them (14 by
+default) in the `backup-data` volume. At 04:00 the cron container ships
+anything new to object storage, if the `S3_*` variables from
+`docs/keys-needed.md` are set. With no bucket the backup still happens and
+is still verified — it just stays on the machine, which is better than
+nothing and worse than off-site.
+
+Three things worth knowing about it.
+
+**It runs on the `mysql:8.4` image, not the app image.** MySQL 8.4
+authenticates with `caching_sha2_password`, and Alpine's `mariadb-client` —
+which is what `apk add mysql-client` actually installs — does not ship that
+plugin, so it cannot connect at all. Debian's `default-mysql-client` is the
+same package under another name. The alternative was weakening the database
+user's auth plugin, which is not a trade worth making for convenience.
+
+**It verifies before it keeps.** `mysqldump` ends with `-- Dump completed
+on …`, and a dump without that line was truncated: the disk filled, the
+connection dropped, the container was killed. That file has the right name,
+a plausible size and a gzip that opens, and it restores as a partial
+database — which you discover on the day you need it. `docker/backup.sh`
+checks for the marker and for a table it knows exists, and deletes the
+archive if either is missing.
+
+**Remote retention is the bucket's job.** Set a lifecycle rule rather than
+letting a script delete backups: a script that deletes backups is a script
+that can delete backups, and the day it has a bug is the day you need them.
+On R2, bucket → **Settings** → *Object lifecycle rules* → delete objects
+under the `backups/` prefix after 90 days. S3 is the same under
+*Management → Lifecycle*.
+
+Test the restore. A backup nobody has restored is a hypothesis:
+
+```bash
+docker compose run --rm --entrypoint sh -e MYSQL_PWD=$MYSQL_ROOT_PASSWORD backup -c 'f=$(ls -1 /backups/ekmool-*.sql.gz | tail -1); mysql -h mysql -u root -e "DROP DATABASE IF EXISTS restore_test; CREATE DATABASE restore_test"; gzip -dc "$f" | mysql -h mysql -u root restore_test; mysql -h mysql -u root -e "SELECT COUNT(*) FROM restore_test.products"'
+```
+
+---
+
+## Staging
+
+```bash
+npm run docker:staging
+```
+
+An override on the production compose file rather than a second file, so
+the two cannot drift: everything not named in `docker-compose.staging.yml`
+is production's definition. It gets its own database volume, its own ports
+(8081 and 3307 by default), nginx always on rather than behind the edge
+profile, and two-day backup retention.
+
+nginx always on matters more than it sounds. Production runs behind it, so
+staging must too, or the thing staging tests is not the thing that ships.
+And with the app port unpublished there, staging is the only place you find
+out whether `--scale app=4` actually works before production asks.
+
+---
+
+## Uptime monitoring
+
+A hosted monitor is the better answer for most shops, for one reason: it
+notices when the whole machine is gone, which a process on that machine
+cannot. UptimeRobot's free tier polls every five minutes and is enough.
+Point it at `/api/health`.
+
+If you want one that reads the payload rather than only the status code:
+
+```bash
+UPTIME_WEBHOOK_URL=https://hooks.slack.com/... npm run uptime -- https://ekmool.com
+```
+
+Three rules it works to. **`ok` is the page, not the dependencies** — the
+endpoint reports `ok: true` while the database is down, because browsing is
+served from static output and customers are unaffected, so a degraded
+dependency is logged and never wakes anyone. **It alerts on the
+transition**, once down and once back, rather than every sixty seconds for
+four hours. And it wants **two consecutive failures** before saying
+anything, because one timeout is a network blip and paging on it is how
+people learn to distrust the alarm.
+
+---
+
 ## After the first deploy
 
-- `curl https://ekmool.com/api/health` → `{"ok":true,"db":"up"}`
+- `curl https://ekmool.com/api/health` → `{"ok":true,"db":"up","redis":"up"}`
+  — and `rateLimiter` must read `redis` on anything running more than one
+  replica, or the limits are per-process and four times looser than they
+  look
+- Hit it twice behind a load balancer and confirm `instance` changes
+- `curl -sI https://ekmool.com/sw.js` returns JavaScript, and Chrome offers
+  to install the site from the address bar
 - `https://ekmool.com/sitemap.xml` lists 18 URLs with the right origin (if
   they say `localhost`, `NEXT_PUBLIC_APP_URL` is wrong)
 - `npm run audit` against the deployed origin

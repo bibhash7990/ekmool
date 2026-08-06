@@ -101,7 +101,10 @@ Numbers and method: [docs/loadtest.md](docs/loadtest.md).
 | `npm run standalone:start` | Run the standalone bundle |
 | `npm run typecheck` / `lint` | TypeScript and ESLint |
 | `npm run docker:up` / `docker:edge` | Whole stack, without / with nginx |
+| `npm run docker:staging` | The same stack as a staging environment, on its own ports and volumes |
 | `npm run docker:logs` / `docker:down` / `docker:reset` | Tail, stop, wipe |
+| `npm run backup` | Dump, verify, upload to object storage, prune. `-- --upload-only` ships what the container already wrote |
+| `npm run uptime -- https://your-site` | Poll `/api/health`, alert on the transition, recover quietly |
 | `npm run db:up` / `db:down` | Start/stop the MySQL container |
 | `npm run db:migrate` / `db:seed` | Schema and catalogue content |
 | `npm run db:reset-stock` | Restore stock after load testing (dev only) |
@@ -128,6 +131,7 @@ the difference between a green tick and evidence.
 | `npm run test:discovery` | Search ranking and synonyms, filters, PIN code estimates, wishlist scoping, back-in-stock |
 | `npm run test:promotions` | Coupon arithmetic, caps under concurrency, GST on a discounted line, verified-buyer reviews, newsletter double opt-in, share cards |
 | `npm run test:admin` | CSV escaping and formula injection, presigned uploads, product CRUD and what it refuses, report arithmetic, return transitions, the audit log |
+| `npm run test:offline` | The service worker's exclusion list, manifest installability, the CSP directives a PWA needs, and the shared rate limiter |
 | `npm run test:db-down` | Browsing with MySQL stopped (stop it first) |
 | `npm run test:jobs` | Cron authorisation, stale-order cancel, reminder dedupe |
 | `npm run validate:schema` | Titles, descriptions, canonicals, JSON-LD, internal links |
@@ -374,6 +378,66 @@ section 1b asserts.
   committed, so a logging failure must not turn a saved edit into an error
   the owner sees and retries. There is deliberately no update and no delete
   — a log the application can rewrite is not evidence of anything.
+- **The rate limiter is shared only when Redis is.** In-memory buckets are
+  per-process, so `--scale app=4` turns a 10/min checkout limit into forty
+  a minute and the 5/min on order lookup into twenty. Set `REDIS_URL` for
+  anything running more than one replica; `/api/health` reports which store
+  is behind it. The Lua script applies the whole bucket atomically and uses
+  **Redis's clock**, not the caller's — four containers disagreeing about
+  the time would refill at different rates and the fast one would hand out
+  free tokens.
+- **`enableOfflineQueue: false` on the command connection, `true` on the
+  subscriber.** The default buffers commands while Redis is unreachable and
+  resolves them on reconnect, which would hang a checkout rather than
+  erroring it — so the request path fails fast and falls back to the
+  in-memory bucket. The subscriber wants the opposite: its one SUBSCRIBE
+  lands before the socket is up and would be rejected outright. Both were
+  measured, not reasoned about.
+- **A cache purge is announced, not just applied.** Next's cache lives in
+  the process that holds it, so on four containers an admin publishing a
+  product purges one and the other three serve the old catalogue for an
+  hour. `revalidate.ts` publishes on a Redis channel and each instance
+  applies it by calling its own `/api/revalidate?fanout=1` over loopback —
+  a route handler, because `revalidateTag` needs a request store and a
+  pub/sub callback has none. The `fanout` flag is what stops two
+  containers forwarding the same purge to each other forever.
+- **`instrumentation.ts` does not run in the standalone bundle.** Next's
+  tracer leaves `instrumentation.js` out of `.next/standalone`, which is
+  what the Dockerfile serves — so `register()` never fired in production,
+  and **Sentry's server-side init never ran there either**. Found by
+  accident in M15 when the purge subscriber silently did not start.
+  `bootOnce()` in `src/lib/boot.ts` is called from both places; `/api/health`
+  is the one route every deployment shape hits within seconds of boot.
+- **The service worker never touches anything private.** `/api`, `/admin`,
+  `/checkout`, `/orders`, `/account`, `/track` are excluded by prefix, and
+  only GET is intercepted. The Cache API is origin-scoped storage that
+  outlives the tab, so a cached order page is a privacy leak on a shared
+  phone. Navigations are network-first with a 3.5s timeout — a cached price
+  is worse than a wait, and this is a shop.
+- **Only Cash on Delivery is ever queued offline,** and only because every
+  order carries an Idempotency-Key with a unique index behind it, so a
+  replay that races the page's own retry makes one order rather than two. A
+  prepaid order needs the Razorpay window and cannot be held; queueing one
+  would mean placing an unpaid order and hoping. The wording never says
+  "placed" — it says "waiting to be sent", because that is what it is.
+- **The script budget must measure a first visit.** A response served by
+  the service worker has a `transferSize` of zero, so a warm cache would
+  make the budget pass while a real regression sailed through. `audit.mjs`
+  fails if any counted script came from the worker. Measured: Lighthouse
+  registers it on `load`, after the trace window, so none do.
+- **A backup is not a file.** `docker/backup.sh` checks for mysqldump's
+  "Dump completed on" marker and for a table it knows exists, and deletes
+  the archive if either is missing — a truncated dump has the right name, a
+  plausible size and a gzip that opens, and restores as a partial database.
+  Remote retention is an object-lifecycle rule on the bucket, not a delete
+  in this script: a script that deletes backups is a script that can delete
+  backups.
+- **The dump runs on the mysql:8.4 image, not the app image.** MySQL 8.4
+  authenticates with caching_sha2_password and Alpine's mariadb-client does
+  not ship that plugin — `apk add mysql-client` installs the same package
+  under another name, and Debian's `default-mysql-client` is also MariaDB.
+  Measured, not assumed. The alternative was weakening the database user's
+  auth plugin.
 - **Parameterised SQL only**, secrets only via env.
 - **Never fabricate social proof.** Nothing in `reviews` is seeded, and a
   product nobody has reviewed shows no rating, no average and no count —

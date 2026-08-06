@@ -14,6 +14,7 @@
  * UTC for the two daily jobs. node-cron takes a timezone, so the times
  * here are written directly in IST.
  */
+import { spawn } from "node:child_process";
 import cron from "node-cron";
 import { loadEnv } from "./load-env.mts";
 
@@ -95,6 +96,41 @@ for (const entry of SCHEDULE) {
     `[cron] scheduled ${entry.job.padEnd(28)} ${entry.expression.padEnd(12)} (${entry.description})`,
   );
 }
+
+/**
+ * Shipping the night's backup to object storage.
+ *
+ * Not an HTTP job like the four above, because it is not the application's
+ * work — it reads a file from a shared volume and signs an S3 request, and
+ * routing that through a web endpoint would mean an endpoint that uploads
+ * whatever it is pointed at.
+ *
+ * 04:00 IST, an hour after the backup service takes its dump at 03:00. If
+ * a dump is still running the upload finds nothing new and the next night
+ * catches it: the `.uploaded` marker files make a missed run self-healing
+ * rather than a gap.
+ *
+ * Says so and does nothing when there is no object storage configured,
+ * which is the local and single-VPS case. The backup still exists, on
+ * disk, verified.
+ */
+function uploadBackups(): void {
+  const child = spawn("npm", ["run", "backup", "--", "--upload-only"], {
+    stdio: "inherit",
+    shell: process.platform === "win32",
+  });
+  child.on("error", (error: Error) => {
+    console.error("[cron] backup upload could not start:", error.message);
+  });
+  child.on("close", (code: number | null) => {
+    if (code !== 0) console.error(`[cron] backup upload exited ${code}`);
+  });
+}
+
+cron.schedule("0 4 * * *", uploadBackups, { timezone: TIMEZONE });
+console.log(
+  `[cron] scheduled ${"backup-upload".padEnd(28)} ${"0 4 * * *".padEnd(12)} (04:00 IST daily)`,
+);
 
 console.log(`[cron] runner active against ${BASE_URL} in ${TIMEZONE}`);
 

@@ -88,6 +88,49 @@ services:
       start_period: 40s
     networks: [ekmool]
 
+  # Shared rate-limit buckets and cross-instance cache purges.
+  #
+  # Optional in the sense that the app runs without it — but not optional
+  # the moment you run more than one replica. Each Node process keeps its
+  # own in-memory buckets, so `--scale app=4` turns a 10/min checkout limit
+  # into forty a minute, and an admin edit purges the cache of exactly one
+  # container while the other three keep serving yesterday's catalogue.
+  redis:
+    image: redis:7.4-alpine
+    container_name: ekmool-redis
+    restart: unless-stopped
+    ports:
+      # Published for host tooling — `npm run dev` and `npm run test:offline`
+      # against a local server. Drop this line in production, as with
+      # MySQL above: an open Redis on a public interface is how a machine
+      # gets mined, and the app reaches it over the compose network.
+      # docker-compose.staging.yml already removes it.
+      - "${REDIS_PORT:-6379}:6379"
+    # No persistence, deliberately. Everything in here is a rate-limit
+    # bucket that refills within a minute and a pub/sub channel with no
+    # history. An AOF or an RDB would be disk writes to protect data whose
+    # correct recovery behaviour is to be forgotten.
+    command:
+      - redis-server
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+      # Bounded, so a flood of unique IPs cannot grow this without limit.
+      # The keys carry their own PEXPIRE; this is the backstop, and LRU is
+      # the right eviction for buckets — the oldest are the ones that have
+      # already refilled.
+      - --maxmemory
+      - 128mb
+      - --maxmemory-policy
+      - allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [ekmool]
+
   # One-shot. Schema, then catalogue content.
   migrate:
     <<: *app-image
@@ -131,6 +174,9 @@ services:
     environment:
       DATABASE_HOST: mysql
       DATABASE_PORT: "3306"
+      # Overrides whatever .env.local says, because "localhost" from inside
+      # a container is the container. Same reasoning as DATABASE_HOST above.
+      REDIS_URL: redis://redis:6379
       PORT: "3000"
       HOSTNAME: 0.0.0.0
     ports:
@@ -146,6 +192,8 @@ services:
     depends_on:
       builder:
         condition: service_completed_successfully
+      redis:
+        condition: service_healthy
     networks: [ekmool]
 
   # The three scheduled jobs, in IST. On Vercel these are driven by
@@ -162,9 +210,42 @@ services:
       # Internal address, not the public one. NEXT_PUBLIC_APP_URL is the
       # customer-facing origin and may not even resolve from in here.
       CRON_TARGET_URL: http://app:3000
+      REDIS_URL: redis://redis:6379
+      # Shared with the backup service. This container is the one that can
+      # sign an S3 request — the SigV4 implementation is TypeScript in
+      # src/lib/storage.ts — so it ships what the other one wrote.
+      BACKUP_DIR: /backups
+    volumes:
+      - backup-data:/backups
     depends_on:
       app:
         condition: service_healthy
+
+  # Nightly dump, verified, kept for BACKUP_KEEP_DAYS.
+  #
+  # On the mysql:8.4 image because that is where a working MySQL 8.4 client
+  # is. Alpine's mariadb-client cannot authenticate to it at all —
+  # caching_sha2_password.so is not in the package — which was measured
+  # rather than assumed. docker/backup.sh has the full account.
+  backup:
+    image: mysql:8.4
+    container_name: ekmool-backup
+    restart: unless-stopped
+    env_file: *env-files
+    environment:
+      DATABASE_HOST: mysql
+      DATABASE_PORT: "3306"
+      BACKUP_DIR: /backups
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+      BACKUP_AT_HOUR_IST: ${BACKUP_AT_HOUR_IST:-3}
+    entrypoint: ["sh", "/backup.sh"]
+    volumes:
+      - ./docker/backup.sh:/backup.sh:ro
+      - backup-data:/backups
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks: [ekmool]
 
   # Optional: `docker compose --profile edge up -d`.
   #
@@ -189,6 +270,7 @@ services:
 volumes:
   mysql-data:
   app-build:
+  backup-data:
 
 networks:
   ekmool:

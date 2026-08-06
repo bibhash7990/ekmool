@@ -19,6 +19,12 @@ export const dynamic = "force-dynamic";
  * The moderation path is narrower on purpose: publishing a review calls
  * revalidateReviews() alone, so it does not send every product page back
  * to the database for catalogue data that has not changed.
+ *
+ * `?fanout=1&kind=…` is the other caller: src/lib/purge-subscriber.ts,
+ * applying a purge that another instance announced over Redis. It narrows
+ * to the one tag that actually changed and, critically, suppresses the
+ * re-announcement — without which two containers would forward the same
+ * purge to each other indefinitely.
  */
 export async function POST(request: NextRequest) {
   const provided = request.headers.get("x-revalidate-secret") ?? "";
@@ -27,12 +33,24 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  revalidateCatalog();
-  revalidateReviews();
+  const fanout = request.nextUrl.searchParams.get("fanout") === "1";
+  const kind = request.nextUrl.searchParams.get("kind");
+  const options = fanout ? { broadcast: false } : undefined;
+
+  const tags: string[] = [];
+  if (!fanout || kind === "catalog") {
+    revalidateCatalog(options);
+    tags.push("products");
+  }
+  if (!fanout || kind === "reviews") {
+    revalidateReviews(options);
+    tags.push("reviews");
+  }
 
   return NextResponse.json({
     revalidated: true,
-    tags: ["products", "reviews"],
+    tags,
+    fanout,
     at: new Date().toISOString(),
   });
 }

@@ -1,0 +1,244 @@
+name: CI
+
+# Every push to main and every pull request against it. Nothing here
+# deploys — the workflow's only job is to say whether the change is safe,
+# and a pipeline that also ships is a pipeline people learn to skip.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# A second push to the same branch cancels the first. A PR under active
+# work otherwise queues four runs of a twenty-minute job to tell you about
+# a commit that no longer exists.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "22"
+
+jobs:
+  # Fast, no services. It fails in ninety seconds on a typo rather than
+  # after the database has come up and the site has been built.
+  static:
+    name: Types and lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+
+  # The real one: a MySQL, a Redis, a production build, and every suite
+  # that talks to a running server.
+  verify:
+    name: Build and test
+    runs-on: ubuntu-latest
+    needs: static
+
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: ci_root
+          MYSQL_DATABASE: ekmool
+          MYSQL_USER: ekmool
+          MYSQL_PASSWORD: ci_password
+        ports:
+          - 3306:3306
+        # Same reasoning as docker-compose: authenticate over TCP as the
+        # application user, which proves the user and the database exist
+        # rather than only that a server is listening.
+        options: >-
+          --health-cmd="mysql -h 127.0.0.1 --protocol=TCP -u ekmool -pci_password -e 'SELECT 1' ekmool"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+      redis:
+        image: redis:7.4-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=20
+
+    env:
+      DATABASE_HOST: 127.0.0.1
+      DATABASE_PORT: "3306"
+      DATABASE_USER: ekmool
+      DATABASE_PASSWORD: ci_password
+      DATABASE_NAME: ekmool
+      MYSQL_ROOT_PASSWORD: ci_root
+      REDIS_URL: redis://127.0.0.1:6379
+      NEXT_PUBLIC_APP_URL: http://localhost:3100
+      # Test-run values. Not secrets and not reused anywhere: no third
+      # party is configured in CI, so nothing here authenticates against
+      # anything. Deliberately literal rather than repository secrets —
+      # a workflow that needs secrets to run cannot run on a fork's PR.
+      SESSION_SECRET: ci-session-secret-0123456789abcdef0123456789abcdef
+      CRON_SECRET: ci-cron-secret-0123456789abcdef0123456789abcdef
+      REVALIDATE_SECRET: ci-revalidate-0123456789abcdef0123456789abcdef
+      PORT: "3100"
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci
+
+      - name: Schema and catalogue
+        run: |
+          npm run db:migrate
+          npm run db:seed
+
+      - name: Build
+        run: |
+          npm run build
+          npm run standalone
+
+      - name: Start the server
+        run: |
+          node .next/standalone/server.js > server.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:3100/api/health > /dev/null; then
+              echo "up after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "server never came up"
+          cat server.log
+          exit 1
+
+      - name: Redis is actually in use
+        run: |
+          backing=$(curl -s http://localhost:3100/api/health | grep -o '"rateLimiter":"[a-z]*"')
+          echo "$backing"
+          test "$backing" = '"rateLimiter":"redis"'
+
+      # Sequential, and each on its own line so a failure names itself in
+      # the job summary. They are not parallel-safe: several drive checkout
+      # through the same rate limiter, and running them together produces
+      # 429s that look like failures and are not.
+      - name: Structured data
+        run: npm run validate:schema
+
+      - name: Admin
+        run: npm run test:admin
+
+      - name: Checkout
+        run: npm run test:checkout 3100
+
+      - name: Account
+        run: npm run test:account 3100
+
+      - name: Commerce
+        run: npm run test:commerce 3100
+
+      - name: Consent and security headers
+        run: npm run test:consent 3100
+
+      - name: Discovery
+        run: npm run test:discovery 3100
+
+      - name: Promotions
+        run: npm run test:promotions 3100
+
+      - name: Jobs
+        run: npm run test:jobs 3100
+
+      - name: Offline and PWA
+        run: npm run test:offline 3100
+
+      - name: Server log
+        if: failure()
+        run: cat server.log
+
+  # Its own job so a failed budget is legible at a glance in the PR checks,
+  # and so it can be re-run without repeating the suites.
+  budget:
+    name: Lighthouse budget
+    runs-on: ubuntu-latest
+    needs: static
+
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: ci_root
+          MYSQL_DATABASE: ekmool
+          MYSQL_USER: ekmool
+          MYSQL_PASSWORD: ci_password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysql -h 127.0.0.1 --protocol=TCP -u ekmool -pci_password -e 'SELECT 1' ekmool"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+
+    env:
+      DATABASE_HOST: 127.0.0.1
+      DATABASE_PORT: "3306"
+      DATABASE_USER: ekmool
+      DATABASE_PASSWORD: ci_password
+      DATABASE_NAME: ekmool
+      NEXT_PUBLIC_APP_URL: http://localhost:3100
+      SESSION_SECRET: ci-session-secret-0123456789abcdef0123456789abcdef
+      REVALIDATE_SECRET: ci-revalidate-0123456789abcdef0123456789abcdef
+      PORT: "3100"
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci
+
+      - run: |
+          npm run db:migrate
+          npm run db:seed
+
+      - run: |
+          npm run build
+          npm run standalone
+
+      - name: Start the server
+        run: |
+          node .next/standalone/server.js > server.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:3100/api/health > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat server.log
+          exit 1
+
+      # The gate that has caught the most regressions of anything here: SEO
+      # 100, accessibility 100, and a per-page script budget with almost no
+      # headroom. A generous budget catches nothing, which is the only
+      # thing a budget is for.
+      - name: Scores and script budget
+        run: npm run audit 3100
+
+      # The raw reports, so a budget failure can be read rather than
+      # guessed at — which request grew, and by how much.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lighthouse-reports
+          path: research/audits/
+          retention-days: 14
+          if-no-files-found: ignore

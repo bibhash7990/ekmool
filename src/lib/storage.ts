@@ -180,9 +180,33 @@ export function presignUpload(params: {
   now?: Date;
   expiresInSeconds?: number;
 }): PresignedUpload | null {
+  if (!isAllowedImageType(params.contentType)) return null;
+  return presignPut({
+    key: buildObjectKey(params.slug, params.contentType),
+    contentType: params.contentType,
+    now: params.now,
+    expiresInSeconds: params.expiresInSeconds,
+  });
+}
+
+/**
+ * The signing itself, for a key the caller already has.
+ *
+ * Separate from presignUpload because there are two callers with different
+ * rules: an admin image upload, where the key must be generated here and
+ * the type must be an image the browser can display; and the nightly
+ * backup, which writes one gzip to a path it chooses. Sharing the
+ * signature and not the policy is the right seam — a backup is not
+ * untrusted input, and refusing it for not being a JPEG would be silly.
+ */
+export function presignPut(params: {
+  key: string;
+  contentType: string;
+  now?: Date;
+  expiresInSeconds?: number;
+}): PresignedUpload | null {
   const config = getStorageConfig();
   if (!config) return null;
-  if (!isAllowedImageType(params.contentType)) return null;
 
   // Short. A presigned URL is a bearer credential: anyone holding it can
   // write that object. Five minutes is ample for a photo and leaves little
@@ -192,7 +216,7 @@ export function presignUpload(params: {
     3600,
   );
 
-  const key = buildObjectKey(params.slug, params.contentType);
+  const key = params.key;
   const now = params.now ?? new Date();
   const amzDate = `${now.toISOString().slice(0, 19).replace(/[-:]/g, "")}Z`;
   const datestamp = amzDate.slice(0, 8);

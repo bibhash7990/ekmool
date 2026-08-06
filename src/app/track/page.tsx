@@ -5,6 +5,7 @@ import { getSession } from "@/lib/session";
 import { Eyebrow } from "@/components/ui/Eyebrow";
 import { SoilLine } from "@/components/ui/SoilLine";
 import { TrackOrderForm } from "@/components/account/TrackOrderForm";
+import { QueuedOrders } from "@/components/checkout/QueuedOrders";
 import { turnstileSiteKey } from "@/lib/turnstile";
 
 export const dynamic = "force-dynamic";
@@ -71,6 +72,14 @@ export default async function TrackPage({
         with the name and mobile number you ordered with and we will find it
         for you.
       </p>
+
+      {/*
+        Renders nothing unless this browser is holding an order submitted
+        offline — which is almost always. It belongs here because "where is
+        my order" is the question this page answers, and an order still in
+        IndexedDB is the one case where the answer is not on our server.
+      */}
+      <QueuedOrders />
     </div>
   );
 }

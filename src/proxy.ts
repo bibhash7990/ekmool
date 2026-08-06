@@ -5,7 +5,8 @@ import { hasClerk } from "@/lib/env";
 
 /**
  * Next 16 request interception (formerly middleware.ts). Runs on the
- * Node.js runtime, so the in-memory rate limiter keeps its state.
+ * Node.js runtime, which is what lets the limiter hold state at all —
+ * in memory on one instance, in Redis across several.
  *
  * Deliberately narrow: the matcher below excludes every public page, so
  * browsing paths are served straight from the static/ISR cache and never
@@ -20,7 +21,9 @@ import { hasClerk } from "@/lib/env";
  */
 const isProtectedRoute = createRouteMatcher(["/admin(.*)", "/api/admin(.*)"]);
 
-function applyRateLimit(request: NextRequest): NextResponse | null {
+async function applyRateLimit(
+  request: NextRequest,
+): Promise<NextResponse | null> {
   const { pathname } = request.nextUrl;
   if (!pathname.startsWith("/api/")) return null;
 
@@ -35,7 +38,7 @@ function applyRateLimit(request: NextRequest): NextResponse | null {
 
   const { limit, windowMs } = limitsFor(pathname);
   const key = `${clientIp(request.headers)}:${limit}`;
-  const result = rateLimiter.check(key, limit, windowMs);
+  const result = await rateLimiter.check(key, limit, windowMs);
 
   if (!result.allowed) {
     return NextResponse.json(
@@ -67,7 +70,7 @@ function applyRateLimit(request: NextRequest): NextResponse | null {
  * and sells with no Clerk account at all.
  */
 const withClerk = clerkMiddleware(async (auth, request) => {
-  const limited = applyRateLimit(request as NextRequest);
+  const limited = await applyRateLimit(request as NextRequest);
   if (limited) return limited;
   if (isProtectedRoute(request)) {
     await auth.protect();
@@ -76,11 +79,11 @@ const withClerk = clerkMiddleware(async (auth, request) => {
 
 type ProxyEvent = Parameters<typeof withClerk>[1];
 
-export function proxy(request: NextRequest, event: ProxyEvent) {
+export async function proxy(request: NextRequest, event: ProxyEvent) {
   if (hasClerk) {
     return withClerk(request, event);
   }
-  return applyRateLimit(request) ?? NextResponse.next();
+  return (await applyRateLimit(request)) ?? NextResponse.next();
 }
 
 export const config = {

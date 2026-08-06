@@ -40,6 +40,13 @@ const CSP = [
   // The payment modal, Turnstile's challenge, and Clerk's sign-in when it
   // is configured. Turnstile renders inside an iframe it owns.
   "frame-src 'self' https://*.razorpay.com https://challenges.cloudflare.com https://*.clerk.accounts.dev",
+  // Both already fall back to default-src, so both are already 'self'.
+  // Stated anyway: a future tightening of default-src would otherwise stop
+  // the service worker registering and the manifest loading, and that
+  // failure mode — the site works, it just quietly stops being installable
+  // and stops working offline — is one nobody would notice for months.
+  "worker-src 'self'",
+  "manifest-src 'self'",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",

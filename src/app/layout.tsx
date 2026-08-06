@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Marcellus, Figtree } from "next/font/google";
 import "./globals.css";
 
@@ -62,6 +62,43 @@ export const metadata: Metadata = {
   formatDetection: { telephone: false },
 };
 
+/**
+ * `maximumScale` and `userScalable` are deliberately absent.
+ *
+ * Locking zoom is the most common accessibility failure on a mobile site,
+ * and it is nearly always done for one reason — a layout that breaks when
+ * zoomed. Ours does not, so there is nothing to hide.
+ *
+ * themeColor tints the Android status bar and the iOS standalone chrome.
+ * It has to be a literal here for the same reason the manifest does: a
+ * browser reads a meta tag, not a CSS variable. It is --color-ek-green-900.
+ */
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: "#1C3A2D",
+};
+
+/**
+ * Service worker registration, inline and tiny.
+ *
+ * Inline because a separate file would be a network round trip for four
+ * lines that must run once, and because the JS budget this site is held to
+ * (190 KB transferred, per page) is measured in requests of type Script —
+ * a module import for this would be real bytes on every page for something
+ * no page needs during render.
+ *
+ * After `load`, so it never competes with the critical path. Production
+ * only: a service worker in `next dev` caches HMR chunks and produces the
+ * kind of bug where a change does not appear and nobody can say why.
+ */
+const REGISTER_SW = `
+if ('serviceWorker' in navigator) {
+  addEventListener('load', function () {
+    navigator.serviceWorker.register('/sw.js').catch(function () {});
+  });
+}`;
+
 export default function RootLayout({
   children,
 }: {
@@ -89,6 +126,16 @@ export default function RootLayout({
           <AnalyticsLoader />
           <ConsentBanner />
         </StoreProvider>
+        {process.env.NODE_ENV === "production" && (
+          <script
+            // A constant defined above, in this file — nothing here comes
+            // from a request. The CSP permits it because script-src already
+            // carries 'unsafe-inline' (next.config.ts explains why there is
+            // no nonce); this adds no new latitude, and the worker itself
+            // is covered by the explicit worker-src 'self'.
+            dangerouslySetInnerHTML={{ __html: REGISTER_SW }}
+          />
+        )}
       </body>
     </html>
   );

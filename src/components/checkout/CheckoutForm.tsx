@@ -243,18 +243,24 @@ export function CheckoutForm({
     }
 
     setSubmitting(true);
+
+    // Built before the request, so the offline path below can hold exactly
+    // what would have been sent, under exactly the same idempotency key.
+    const idempotencyKey = currentIdempotencyKey();
+    const body = {
+      ...parsed.data,
+      turnstileToken,
+      [HONEYPOT_FIELD]: honeypot,
+    };
+
     try {
       const response = await fetch("/api/checkout", {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          "idempotency-key": currentIdempotencyKey(),
+          "idempotency-key": idempotencyKey,
         },
-        body: JSON.stringify({
-          ...parsed.data,
-          turnstileToken,
-          [HONEYPOT_FIELD]: honeypot,
-        }),
+        body: JSON.stringify(body),
       });
 
       const data = await response.json();
@@ -295,6 +301,43 @@ export function CheckoutForm({
       dispatch(cartCleared());
       router.push(`/order/${data.orderId}/confirmed`);
     } catch {
+      // The request never completed — no signal, or a connection that
+      // dropped mid-flight.
+      //
+      // Cash on Delivery can be held and sent later; a prepaid order cannot,
+      // because it needs the Razorpay window, and queueing one would mean
+      // placing an unpaid order and hoping. So only COD is offered the
+      // outbox, and the wording never claims the order is placed — it is
+      // not, and it may still be refused when it goes.
+      if (paymentMethod === "cod") {
+        const { queueOrder } = await import("@/lib/offline-queue");
+        const held = await queueOrder({
+          idempotencyKey,
+          payload: body,
+          summary: {
+            total,
+            itemCount: items.reduce((sum, item) => sum + item.qty, 0),
+            email: parsed.data.customer.email,
+            lines: items.map((item) => ({
+              name: item.productName,
+              pack: item.packLabel,
+              qty: item.qty,
+            })),
+          },
+        });
+
+        if (held) {
+          // Cleared on purpose. Leaving it full invites a second checkout
+          // while the first is still queued — and that one would carry a
+          // new idempotency key, so it would be a genuine duplicate order
+          // rather than a harmless replay. /order/queued lists exactly what
+          // was in it, for the case where the order is later refused.
+          dispatch(cartCleared());
+          router.push("/order/queued");
+          return;
+        }
+      }
+
       setSubmitError(
         "We could not reach our servers. Your cart is safe — please check your connection and try again.",
       );

@@ -1,0 +1,74 @@
+# Staging.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.staging.yml \
+#     --profile edge up -d --build
+#
+# An override rather than a second compose file, so staging and production
+# cannot drift: everything not named here is production's definition, and a
+# change to the stack is a change to both.
+#
+# What staging is for is the deploy itself — the migration running against a
+# database that has data in it, the build finding a real catalogue, nginx
+# and the app agreeing about headers. None of that is exercised by
+# `npm run dev`.
+#
+# The four differences below, and why each one:
+services:
+  # A separate database volume and separate ports, so a staging stack can
+  # run on the same host as production without either noticing.
+  mysql:
+    ports:
+      - "${STAGING_MYSQL_PORT:-3307}:3306"
+    volumes:
+      - staging-mysql-data:/var/lib/mysql
+
+  redis:
+    # Not published. Nothing outside the compose network has business
+    # talking to it, and on a shared host an open Redis is how a machine
+    # gets mined.
+    ports: []
+
+  app:
+    # Unpublished: nginx is the only way in, which is also the only
+    # configuration where `--scale app=N` works. Staging is where you find
+    # out whether the app is actually stateless, and it is not a question
+    # you want to first ask in production.
+    ports: []
+    environment:
+      NEXT_PUBLIC_APP_URL: ${STAGING_APP_URL:-http://localhost:8081}
+      # Loud. Staging exists to surface the failures production must not
+      # have, and a quiet log is a staging environment that tells you
+      # nothing until it is too late.
+      NODE_ENV: production
+      LOG_LEVEL: debug
+
+  nginx:
+    # Always on here, not behind the edge profile. Production runs behind
+    # it, so staging must too, or the thing staging is testing is not the
+    # thing that ships.
+    profiles: []
+    ports:
+      - "${STAGING_EDGE_PORT:-8081}:80"
+
+  backup:
+    environment:
+      # Two days. Staging backups are for proving the mechanism runs, not
+      # for keeping anything — and a fortnight of them on a shared disk is
+      # a slow way to fill it.
+      BACKUP_KEEP_DAYS: "2"
+      # An hour after production's, so two stacks on one host do not dump
+      # the same disk at the same moment.
+      BACKUP_AT_HOUR_IST: "4"
+    volumes:
+      - ./docker/backup.sh:/backup.sh:ro
+      - staging-backup-data:/backups
+
+  cron:
+    environment:
+      BACKUP_DIR: /backups
+    volumes:
+      - staging-backup-data:/backups
+
+volumes:
+  staging-mysql-data:
+  staging-backup-data:

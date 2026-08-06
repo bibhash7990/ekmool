@@ -122,6 +122,26 @@ for (const target of TARGETS) {
   const scriptKb =
     scripts.reduce((sum, r) => sum + (r.transferSize ?? 0), 0) / 1024;
 
+  /**
+   * The budget must measure a first visit, not a returning one.
+   *
+   * Since M15 there is a service worker caching /_next/static cache-first,
+   * and a response it serves has a transferSize of zero. If one were ever
+   * counted here the budget would quietly start measuring a warm cache and
+   * would absorb a real regression without complaining — precisely the
+   * failure a budget exists to prevent.
+   *
+   * Measured when the worker landed: Lighthouse registers it on `load`,
+   * after the trace window, so no script request comes from it. This
+   * asserts that rather than trusting it to stay true.
+   */
+  const fromWorker = scripts.filter((r) => r.fromServiceWorker);
+  if (fromWorker.length > 0) {
+    failures.push(
+      `${target.path}: ${fromWorker.length} script(s) came from the service worker — this is measuring a warm cache, not a first visit`,
+    );
+  }
+
   // With no third-party keys configured, the page must talk to nobody but
   // us. Fonts are self-hosted by next/font, Sentry and PostHog stay
   // uninitialised, and Razorpay's checkout.js only loads on /checkout when

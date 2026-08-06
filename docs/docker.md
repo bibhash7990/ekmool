@@ -31,11 +31,27 @@ That serves on **http://localhost:8080**.
 | Service | Kind | Does |
 |---|---|---|
 | `mysql` | long-running | MySQL 8.4, data in the `mysql-data` volume |
+| `redis` | long-running | Shared rate-limit buckets and cache-purge pub/sub |
 | `migrate` | one-shot | `db:migrate` then `db:seed` |
 | `builder` | one-shot | `next build`, publishes to the `app-build` volume |
 | `app` | long-running | Serves the standalone bundle on :3000 |
-| `cron` | long-running | The three scheduled jobs, in IST |
+| `cron` | long-running | The scheduled jobs, in IST, and the backup upload |
+| `backup` | long-running | Nightly verified dump into the `backup-data` volume |
 | `nginx` | long-running, `edge` profile only | gzip offload + caching on :8080 |
+
+`redis` holds nothing that needs to survive a restart — a rate-limit bucket
+refills within a minute and a pub/sub channel has no history — so it runs
+with persistence off, a 128 MB ceiling and LRU eviction. Without it the app
+still works; it simply keeps its buckets per-process, which is correct for
+one replica and wrong for four. `backup` runs on the `mysql:8.4` image
+rather than the app image because Alpine's MySQL client cannot authenticate
+to MySQL 8.4 at all — `docker/backup.sh` records the measurement.
+
+For a staging copy of the same stack on its own ports and volumes:
+
+```bash
+npm run docker:staging
+```
 
 Each waits for the one before it — `service_healthy` for MySQL,
 `service_completed_successfully` for the two one-shots — so the ordering is

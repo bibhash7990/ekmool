@@ -40,6 +40,16 @@ export interface Product {
   shortDescription: string;
   longDescription: string;
   accent: "gold" | "terracotta" | "green";
+  /**
+   * Owner-supplied title tag and meta description, or null.
+   *
+   * Null is the normal case for the launch products: src/content/products.ts
+   * holds hand-written copy for those and is the better source. These exist
+   * for products created in the admin, which have no editorial entry and
+   * cannot get one without a deploy.
+   */
+  seoTitle: string | null;
+  seoDescription: string | null;
   variants: ProductVariant[];
   images: ProductImage[];
 }
@@ -53,6 +63,8 @@ interface ProductRow extends RowDataPacket {
   short_description: string;
   long_description: string;
   accent: "gold" | "terracotta" | "green";
+  seo_title: string | null;
+  seo_description: string | null;
 }
 
 interface VariantRow extends RowDataPacket {
@@ -79,10 +91,10 @@ async function loadCatalog(): Promise<Product[]> {
 
   const [productRows] = await pool.query<ProductRow[]>(
     `SELECT id, slug, name, origin_state, gi_tag_name, short_description,
-            long_description, accent
+            long_description, accent, seo_title, seo_description
        FROM products
       WHERE is_active = 1
-      ORDER BY id`,
+      ORDER BY sort_order, id`,
   );
 
   if (productRows.length === 0) return [];
@@ -110,6 +122,8 @@ async function loadCatalog(): Promise<Product[]> {
     shortDescription: row.short_description,
     longDescription: row.long_description,
     accent: row.accent,
+    seoTitle: row.seo_title,
+    seoDescription: row.seo_description,
     variants: variantRows
       .filter((v) => v.product_id === row.id)
       .map((v) => ({

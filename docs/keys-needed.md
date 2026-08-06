@@ -21,6 +21,8 @@ Nothing here is urgent. Do them in the order that matches what you need next.
 | **Order tracking, history, cancellation** | working — `/track`, no auth provider involved |
 | **Customer account** — orders, profile, saved addresses | working — `/account`, same session, no Clerk |
 | **Invoices, returns, re-order** | working — invoices print pro-forma until section 6 is filled in |
+| **Admin: products, packs, prices, stock, coupons, reviews, returns, reports** | working — but the admin itself needs Clerk, section 3 |
+| Admin photograph *upload* | needs section 9; without it, attach a path under `public/images/` |
 | Background jobs | working |
 | Emails | composed and recorded in `email_log` as `skipped_no_smtp`, not delivered |
 
@@ -318,6 +320,57 @@ Leave it unset and the page says no officer has been appointed yet, points
 at `orders@ekmool.com`, and keeps the timelines. That is deliberate — an
 invented name on a statutory notice would be worse than the gap it hides —
 but **it is still a gap**. Fill it in.
+
+---
+
+## 9. Cloudflare R2 — photographs uploaded from the admin
+
+**Cost:** free up to 10 GB of storage and a generous request allowance, and
+**no egress charge at all**, which is the reason to prefer it to S3 for a
+shop serving images to the public.
+
+Without it the admin still manages photographs — it just cannot accept a
+file. You add the image under `public/images/products/` in the repository
+and give its path, which is exactly how the five launch products work. The
+file picker appears only once storage is configured; an upload control that
+fails when used would be worse than one that is honestly absent.
+
+1. Cloudflare dashboard → **R2** → *Create bucket*. Name it `ekmool-media`.
+2. **Settings** on the bucket → *Public access*. Either connect a custom
+   domain (`media.ekmool.com`) or enable the `r2.dev` subdomain. Whichever
+   you choose is `S3_PUBLIC_BASE_URL` — it is where a browser reads the
+   image from, and it is a different host from the one you upload to.
+3. R2 → **Manage API tokens** → *Create API token*, scoped to **Object Read
+   & Write** on that one bucket. Not account-wide: this token is handed to a
+   web server.
+4. The token screen shows an **S3 endpoint** of the form
+   `https://<account-id>.r2.cloudflarestorage.com`. That is `S3_ENDPOINT`.
+
+```
+S3_ENDPOINT=https://a1b2c3d4.r2.cloudflarestorage.com
+S3_BUCKET=ekmool-media
+S3_ACCESS_KEY_ID=…
+S3_SECRET_ACCESS_KEY=…
+S3_PUBLIC_BASE_URL=https://media.ekmool.com
+S3_REGION=auto
+```
+
+All five or none — a partial set counts as unconfigured.
+
+**No SDK was added for this.** `@aws-sdk/client-s3` plus the presigner is
+around forty packages to produce one signed URL, and the signature is a
+documented HMAC chain that `node:crypto` already has. `src/lib/storage.ts`
+implements Signature Version 4 in about a hundred lines. Any S3-compatible
+endpoint that accepts path-style addressing will work — MinIO and Backblaze
+B2 both do, and so does AWS S3 itself.
+
+Two things it deliberately refuses. **SVG**, because an SVG is an XML
+document that may contain `<script>`, and serving one from a host near your
+own is a stored XSS. And **a client-chosen object key** — the key is
+generated server-side from twelve random bytes, so there is no traversal to
+attempt and no existing photograph to overwrite by guessing its name. The
+signed URL also covers the `Content-Type` header, so a URL issued for a
+JPEG cannot be used to upload an HTML page.
 
 ---
 

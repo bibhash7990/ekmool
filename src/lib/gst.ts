@@ -150,3 +150,13 @@ export function formatRateBps(rateBps: number): string {
   const percent = rateBps / 100;
   return `${Number.isInteger(percent) ? percent : percent.toFixed(2)}%`;
 }
+
+/**
+ * The GST slabs that exist in India, as percentages.
+ *
+ * A closed list rather than a number field. The rate is not the owner's
+ * opinion — it is 0, 5, 12, 18 or 28 — and a typo'd 50 would be collected
+ * from customers, printed on invoices and owed to nobody. The admin form
+ * offers these and the server refuses anything else.
+ */
+export const GST_RATE_OPTIONS = [0, 5, 12, 18, 28] as const;

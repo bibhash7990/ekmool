@@ -112,6 +112,13 @@ Numbers and method: [docs/loadtest.md](docs/loadtest.md).
 All of these run against a live server and a live database, so start one first
 (`npm run standalone:start`, or `npm run dev`).
 
+`test:admin` is the exception and needs only the database. The admin is
+Clerk-gated and Clerk is not configured in development, so there is no HTTP
+surface to drive; it imports the real query modules instead, through the
+`@/` resolve hook in `scripts/alias-loader.mjs`. That means it exercises the
+SQL the application runs rather than SQL written inside the test, which is
+the difference between a green tick and evidence.
+
 | Command | Covers |
 |---|---|
 | `npm run test:checkout` | Idempotency, atomic stock, oversell, webhook signature, rate limiting |
@@ -120,6 +127,7 @@ All of these run against a live server and a live database, so start one first
 | `npm run test:consent` | Security headers, that nothing tracks before consent, the grievance notice, the honeypot |
 | `npm run test:discovery` | Search ranking and synonyms, filters, PIN code estimates, wishlist scoping, back-in-stock |
 | `npm run test:promotions` | Coupon arithmetic, caps under concurrency, GST on a discounted line, verified-buyer reviews, newsletter double opt-in, share cards |
+| `npm run test:admin` | CSV escaping and formula injection, presigned uploads, product CRUD and what it refuses, report arithmetic, return transitions, the audit log |
 | `npm run test:db-down` | Browsing with MySQL stopped (stop it first) |
 | `npm run test:jobs` | Cron authorisation, stale-order cancel, reminder dedupe |
 | `npm run validate:schema` | Titles, descriptions, canonicals, JSON-LD, internal links |
@@ -129,6 +137,17 @@ All of these run against a live server and a live database, so start one first
 
 `npm run audit` and `npm run loadtest` need Chrome and
 [k6](https://k6.io) respectively.
+
+**Run `test:db-down` from a warm cache**, which means browsing the site once
+before stopping MySQL — and not straight after `chaos` or `test:admin`. Both
+of those end by purging the catalogue tag, and `revalidateTag(tag, "max")`
+expires an entry rather than marking it stale. An expired static page with
+no database to regenerate from has nothing to serve, so `/products` and
+`/sitemap.xml` answer 500 instead of the cached copy. That is the honest
+cost of a hard purge and worth knowing before an outage: **do not force a
+revalidation and then take the database down.** Product pages are unaffected
+— they are prerendered and keep a copy either way, which is what `chaos`
+section 1b asserts.
 
 ---
 
@@ -152,12 +171,26 @@ All of these run against a live server and a live database, so start one first
   `text-ek-green-900`). A hardcoded hex in a component is a review failure.
   Note `--color-ek-gold-800` is the only gold safe as ink on light
   backgrounds — `gold-500`/`gold-600` are for fills and dark grounds.
-- **Never call `revalidatePath` on `/products/[slug]`.** It sets
-  `dynamicParams = false`, and revalidatePath removes the prerendered entry
-  rather than marking it stale, leaving nothing to regenerate from — the page
-  404s permanently until a rebuild. Use `revalidateTag(PRODUCTS_TAG)`. This is
-  documented at the call site in `src/lib/revalidate.ts` and guarded by
+- **Never call `revalidatePath` on `/products/[slug]`.** Use
+  `revalidateTag(PRODUCTS_TAG)`. The tag marks pages stale and serves the
+  previous copy while they regenerate, which is what you want; a path purge
+  discards the entry outright. When the route also had `dynamicParams =
+  false` this was catastrophic rather than merely wrong — with no fallback
+  there was nothing left to regenerate from and all five pages 404'd
+  permanently until a rebuild, with the database perfectly healthy. M14 set
+  `dynamicParams = true`, so the failure is no longer permanent, but the
+  rule is unchanged and the reason for it never depended on the bug.
+  Documented at the call site in `src/lib/revalidate.ts` and guarded by
   `npm run chaos`.
+- **A product page must work without editorial copy.**
+  `src/content/products.ts` holds hand-written copy for the five launch
+  products and is the better source when it exists. A product created in the
+  admin has no entry there and cannot get one without a deploy, so
+  `fallbackContent()` derives a real page from what the database knows.
+  Everything in it is a fact already stored — **except the FAQ, which stays
+  empty**. A generated Q&A would be published as FAQPage structured data,
+  which is a spam-policy violation and a claim about customers that is not
+  true.
 - **Never revalidate from the checkout path.** Purging a page discards the copy
   that would otherwise be served during a database outage. Stock display rides
   the hourly window; the atomic decrement is what actually prevents
@@ -293,6 +326,54 @@ All of these run against a live server and a live database, so start one first
   fresh. Scripts that assert on freshly published content use the
   `freshPage()` helper rather than assuming one fetch is enough; this was
   measured, not guessed.
+- **The catalogue archives; it does not delete.** `order_items.variant_id`
+  is `ON DELETE SET NULL`, so removing a variant would not fail — it would
+  quietly detach the line from every order that contained it. Archiving
+  (`is_active = 0`) takes it off the catalogue, out of search and out of
+  checkout, which already requires `v.is_active = 1 AND p.is_active = 1`.
+  Photographs are the one exception and really are deleted: no order line
+  references an image id.
+- **A slug is not just a URL.** It is snapshotted onto every order line,
+  keyed on by reviews and wishlists, and indexed by Google. `updateProduct`
+  throws `SlugLockedError` if any of those point at it, and the admin names
+  which one rather than refusing without a reason.
+- **Stock has exactly one write path.** `setVariantStock` in
+  `src/db/queries/admin.ts`, because a restock from zero has to wake the
+  back-in-stock queue and that decision needs the previous value read under
+  the lock that writes the new one. `updateVariant` deliberately has no
+  `stock_qty` in its `UPDATE` — an innocuous-looking field on the product
+  form would bypass it and silently strand everyone waiting.
+- **Ordered is not collected.** In a cash-on-delivery market these are
+  different numbers and `getSalesSummary` reports both: `gross` is what
+  customers ordered, `realised` is prepaid-and-paid plus COD-and-delivered.
+  Conflating them is how a shop believes it has money it has not been
+  handed.
+- **Reports group on Indian days.** `created_at` is a TIMESTAMP handed back
+  in the session time zone — UTC in the Docker image — so a naive
+  `DATE(created_at)` puts everything ordered before 05:30 IST on the
+  previous day. The `IST()` helper in `src/db/queries/reports.ts` shifts by
+  the measured session offset rather than assuming UTC, and does the
+  arithmetic itself because `CONVERT_TZ` returns NULL when the named
+  time-zone tables are not loaded, which the official MySQL image does not
+  ship.
+- **Every CSV cell is guarded against formula injection.** A value starting
+  `=`, `+`, `-`, `@`, tab or CR is executed by Excel, LibreOffice and Google
+  Sheets on open, and an export is exactly the path that carries customer
+  names, addresses and free text out of the site and into a spreadsheet.
+  `src/lib/csv.ts` prefixes such a cell with an apostrophe — after checking
+  it is not simply a negative number, which would otherwise break every sum
+  in the sheet.
+- **Uploads are presigned; the server never holds the bytes.** Hand-rolled
+  SigV4 in `src/lib/storage.ts`, no SDK. The object key is generated from
+  twelve random bytes so nothing the client sends can steer the path or
+  overwrite an existing photograph, `content-type` is signed so a URL issued
+  for a JPEG cannot accept an HTML document, and SVG is refused outright
+  because it is an XML document that can carry `<script>`.
+- **The audit log has a writer and two readers, and no third function.**
+  `recordAdminAction` never throws: the log records work that is already
+  committed, so a logging failure must not turn a saved edit into an error
+  the owner sees and retries. There is deliberately no update and no delete
+  — a log the application can rewrite is not evidence of anything.
 - **Parameterised SQL only**, secrets only via env.
 - **Never fabricate social proof.** Nothing in `reviews` is seeded, and a
   product nobody has reviewed shows no rating, no average and no count —

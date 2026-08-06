@@ -9,6 +9,31 @@ export const metadata: Metadata = {
 };
 
 /**
+ * Two tiers, not one list of nine.
+ *
+ * The top row is the work: what came in, what to send, what to stock, who
+ * is owed a decision. The quieter row is what you look at deliberately —
+ * numbers, the customer list, and the record of who changed what. Giving
+ * them equal weight would mean nine identical links and no order of
+ * business at all.
+ */
+const PRIMARY = [
+  { href: "/admin", label: "Orders" },
+  { href: "/admin/products", label: "Products" },
+  { href: "/admin/stock", label: "Stock" },
+  { href: "/admin/returns", label: "Returns" },
+  { href: "/admin/reviews", label: "Reviews" },
+  { href: "/admin/coupons", label: "Coupons" },
+];
+
+const SECONDARY = [
+  { href: "/admin/reports", label: "Reports" },
+  { href: "/admin/customers", label: "Customers" },
+  { href: "/admin/audit", label: "Activity" },
+  { href: "/", label: "View site" },
+];
+
+/**
  * ClerkProvider is mounted HERE and nowhere higher. Two consequences the
  * whole graceful-degradation story depends on:
  *   - a production build with no Clerk keys never constructs a provider,
@@ -46,47 +71,27 @@ export default async function AdminLayout({
       <div className="mx-auto max-w-[1320px] px-5 py-8 lg:px-8">
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-ek-green-200 pb-5">
           <nav aria-label="Admin">
-            <ul className="flex items-center gap-6">
-              <li>
-                <Link
-                  href="/admin"
-                  className="link-draw font-display text-20 text-ek-green-900"
-                >
-                  Orders
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/admin/stock"
-                  className="link-draw font-display text-20 text-ek-green-900"
-                >
-                  Stock
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/admin/reviews"
-                  className="link-draw font-display text-20 text-ek-green-900"
-                >
-                  Reviews
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/admin/coupons"
-                  className="link-draw font-display text-20 text-ek-green-900"
-                >
-                  Coupons
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/"
-                  className="link-draw text-15 text-ek-green-700"
-                >
-                  View site
-                </Link>
-              </li>
+            <ul className="flex flex-wrap items-center gap-x-6 gap-y-2">
+              {PRIMARY.map((item) => (
+                <li key={item.href}>
+                  <Link
+                    href={item.href}
+                    className="link-draw font-display text-20 text-ek-green-900"
+                  >
+                    {item.label}
+                  </Link>
+                </li>
+              ))}
+              {SECONDARY.map((item) => (
+                <li key={item.href}>
+                  <Link
+                    href={item.href}
+                    className="link-draw text-15 text-ek-green-700"
+                  >
+                    {item.label}
+                  </Link>
+                </li>
+              ))}
             </ul>
           </nav>
           {hasClerk && <UserButton />}

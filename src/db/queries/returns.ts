@@ -144,13 +144,12 @@ export interface OpenReturn {
 }
 
 /**
- * Everything still waiting on the owner.
+ * Everything still waiting on the owner — the badge on the orders page.
  *
- * The full moderation queue — approve, reject, mark received, refund — is
- * still to come. This exists because the alternative is worse than
- * incomplete: a customer reports damage, the row lands in the table, and
- * nobody is ever told. A request that reaches no one is not a returns
- * feature, it is a form that lies.
+ * This existed before the queue below did, because the alternative was
+ * worse than incomplete: a customer reports damage, the row lands in the
+ * table, and nobody is ever told. A request that reaches no one is not a
+ * returns feature, it is a form that lies.
  */
 export async function listOpenReturns(): Promise<OpenReturn[]> {
   const pool = getPool();
@@ -173,6 +172,218 @@ export async function listOpenReturns(): Promise<OpenReturn[]> {
     detail: row.detail as string,
     createdAt: row.created_at as Date,
   }));
+}
+
+/* ------------------------------------------------------------------ */
+/* The moderation queue                                                */
+
+export interface QueuedReturn extends OpenReturn {
+  status: ReturnStatus;
+  resolution: string | null;
+  totalPaise: number;
+  paymentMethod: "cod" | "razorpay";
+  paymentStatus: string;
+  orderStatus: string;
+  updatedAt: Date;
+}
+
+/**
+ * The queue, filtered by status. Ordered oldest first: a return that has
+ * been sitting for a week is more urgent than one that arrived this
+ * morning, and sorting newest-first is how the old ones never get done.
+ */
+export async function listReturns(
+  status?: ReturnStatus,
+): Promise<QueuedReturn[]> {
+  const pool = getPool();
+  const where = status ? "WHERE r.status = ?" : "";
+  const params = status ? [status] : [];
+
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `SELECT r.id, r.order_id, r.reason, r.detail, r.status, r.resolution,
+            r.created_at, r.updated_at,
+            o.order_ref, o.customer_email, o.customer_name, o.total_paise,
+            o.payment_method, o.payment_status, o.status AS order_status
+       FROM return_requests r
+       JOIN orders o ON o.id = r.order_id
+       ${where}
+      ORDER BY r.created_at ASC
+      LIMIT 500`,
+    params,
+  );
+
+  return rows.map((row) => ({
+    id: row.id as number,
+    orderId: row.order_id as string,
+    orderRef: String(row.order_ref ?? "").toUpperCase(),
+    customerEmail: row.customer_email as string,
+    customerName: row.customer_name as string,
+    reason: row.reason as ReturnReason,
+    detail: row.detail as string,
+    status: row.status as ReturnStatus,
+    resolution: (row.resolution as string | null) ?? null,
+    totalPaise: Number(row.total_paise),
+    paymentMethod: row.payment_method as "cod" | "razorpay",
+    paymentStatus: row.payment_status as string,
+    orderStatus: row.order_status as string,
+    createdAt: row.created_at as Date,
+    updatedAt: row.updated_at as Date,
+  }));
+}
+
+export async function countReturnsByStatus(): Promise<
+  Record<ReturnStatus, number>
+> {
+  const pool = getPool();
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `SELECT status, COUNT(*) AS n FROM return_requests GROUP BY status`,
+  );
+
+  const counts: Record<ReturnStatus, number> = {
+    requested: 0,
+    approved: 0,
+    rejected: 0,
+    received: 0,
+    refunded: 0,
+  };
+  for (const row of rows) {
+    counts[row.status as ReturnStatus] = Number(row.n);
+  }
+  return counts;
+}
+
+/**
+ * Which decisions are available from where.
+ *
+ * A table rather than a chain of ifs, because the illegal transitions are
+ * the interesting ones and a table shows them by omission. `rejected` and
+ * `refunded` are terminal: money having moved, or a decision having been
+ * communicated, is not something to quietly walk back — reopen it by
+ * talking to the customer and, if it really must change, in the database
+ * with a note, where it leaves a mark.
+ */
+const TRANSITIONS: Record<ReturnStatus, ReturnStatus[]> = {
+  requested: ["approved", "rejected"],
+  approved: ["received", "rejected"],
+  received: ["refunded", "rejected"],
+  rejected: [],
+  refunded: [],
+};
+
+export function allowedTransitions(from: ReturnStatus): ReturnStatus[] {
+  return TRANSITIONS[from] ?? [];
+}
+
+export const RETURN_STATUS_LABELS: Record<ReturnStatus, string> = {
+  requested: "Waiting on you",
+  approved: "Approved — awaiting the parcel",
+  received: "Parcel received",
+  refunded: "Refunded",
+  rejected: "Declined",
+};
+
+export type ReturnDecisionResult =
+  | {
+      ok: true;
+      previous: ReturnStatus;
+      orderId: string;
+      customerEmail: string;
+      customerName: string;
+      totalPaise: number;
+      /** True when this decision also marked the order refunded. */
+      orderMarkedRefunded: boolean;
+    }
+  | { ok: false; reason: "not_found" | "illegal_transition"; from?: ReturnStatus };
+
+/**
+ * The owner's decision on a return.
+ *
+ * Marking one **refunded** also sets the order's payment_status, because
+ * this schema has one return per order (uq_return_order) — a return here is
+ * a whole-order return, so an order whose return is refunded and whose
+ * payment still reads "paid" is a contradiction someone would eventually
+ * have to reconcile by hand. It writes an order_status_history row too, so
+ * the customer's own timeline shows the refund rather than going quiet.
+ *
+ * Both writes are in the transaction that moves the return, so there is no
+ * window where the return says refunded and the order does not.
+ */
+export async function decideReturn(params: {
+  id: number;
+  status: ReturnStatus;
+  resolution: string | null;
+  actor: string;
+}): Promise<ReturnDecisionResult> {
+  const pool = getPool();
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const [rows] = await connection.execute<RowDataPacket[]>(
+      `SELECT r.status, r.order_id, o.customer_email, o.customer_name,
+              o.total_paise, o.payment_status
+         FROM return_requests r
+         JOIN orders o ON o.id = r.order_id
+        WHERE r.id = ?
+        FOR UPDATE`,
+      [params.id],
+    );
+    const row = rows[0];
+    if (!row) {
+      await connection.rollback();
+      return { ok: false, reason: "not_found" };
+    }
+
+    const previous = row.status as ReturnStatus;
+    if (!allowedTransitions(previous).includes(params.status)) {
+      await connection.rollback();
+      return { ok: false, reason: "illegal_transition", from: previous };
+    }
+
+    await connection.execute<ResultSetHeader>(
+      `UPDATE return_requests SET status = ?, resolution = ? WHERE id = ?`,
+      [params.status, params.resolution, params.id],
+    );
+
+    let orderMarkedRefunded = false;
+    if (params.status === "refunded" && row.payment_status !== "refunded") {
+      await connection.execute<ResultSetHeader>(
+        `UPDATE orders SET payment_status = 'refunded' WHERE id = ?`,
+        [row.order_id],
+      );
+      orderMarkedRefunded = true;
+    }
+
+    await connection.execute<ResultSetHeader>(
+      `INSERT INTO order_status_history (order_id, from_status, to_status, note, actor)
+       VALUES (?, ?, ?, ?, ?)`,
+      [
+        row.order_id,
+        `return:${previous}`,
+        `return:${params.status}`,
+        params.resolution?.slice(0, 300) ?? null,
+        params.actor,
+      ],
+    );
+
+    await connection.commit();
+
+    return {
+      ok: true,
+      previous,
+      orderId: row.order_id as string,
+      customerEmail: row.customer_email as string,
+      customerName: row.customer_name as string,
+      totalPaise: Number(row.total_paise),
+      orderMarkedRefunded,
+    };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 }
 
 /**
@@ -235,6 +446,21 @@ export async function createReturnRequest(params: {
          VALUES (?, ?, ?)`,
         [params.orderId, params.reason, params.detail],
       );
+
+      // On the order's own timeline, in the same transaction. A return that
+      // is invisible on the page the customer is looking at reads as though
+      // the form did nothing.
+      //
+      // from_status is 'delivered' — which it is, that being the only status
+      // a return can be opened from — and not NULL. A NULL there means "the
+      // order was placed" to OrderTimeline, and this row would render as a
+      // second, later "Order placed".
+      await connection.execute<ResultSetHeader>(
+        `INSERT INTO order_status_history (order_id, from_status, to_status, note, actor)
+         VALUES (?, 'delivered', 'return:requested', ?, 'customer')`,
+        [params.orderId, reasonLabel(params.reason)],
+      );
+
       await connection.commit();
       return { ok: true, id: result.insertId };
     } catch (error) {

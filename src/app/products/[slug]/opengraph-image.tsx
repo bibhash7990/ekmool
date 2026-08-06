@@ -10,9 +10,9 @@ export const contentType = "image/png";
 /**
  * The share card for a product page.
  *
- * Generated at build time alongside the page itself — `dynamicParams` is
- * false on this route, so these are five files baked into the output, not
- * five renders a crawler triggers.
+ * Generated at build time alongside the page itself, from the same list, so
+ * these are files baked into the output rather than renders a crawler
+ * triggers.
  *
  * **Typeset in Georgia rather than Marcellus, on purpose.** `next/font`
  * self-hosts the real display face into a hashed path under
@@ -26,9 +26,20 @@ export const contentType = "image/png";
 /**
  * Without this the image is a dynamic route: every crawler that looks at a
  * share card renders one on the origin. The page beside it is prerendered
- * from the same list, so the card should be too.
+ * from the same list, so the card should be too — including products added
+ * from the admin, which is why this reads the catalogue rather than the
+ * editorial constant. The constant remains the fallback for a build that
+ * cannot reach the database, matching page.tsx.
  */
-export function generateStaticParams() {
+export async function generateStaticParams() {
+  try {
+    const catalog = await getCatalog();
+    if (catalog.length > 0) {
+      return catalog.map((product) => ({ slug: product.slug }));
+    }
+  } catch {
+    // Same reasoning as page.tsx: fall back loudly rather than emit nothing.
+  }
   return Object.keys(PRODUCT_CONTENT).map((slug) => ({ slug }));
 }
 
@@ -49,7 +60,13 @@ export default async function OpengraphImage({
   const origin = product
     ? `${product.giTagName} · ${product.originState}`
     : "Single origin · India";
-  const tagline = content?.tagline ?? "GI-tagged single-origin Indian foods";
+  // The editorial tagline when one is written, the owner's own short
+  // description otherwise, and only then the generic line — which is for a
+  // build that could not reach the database, not for a real product.
+  const tagline =
+    content?.tagline ??
+    product?.shortDescription ??
+    "GI-tagged single-origin Indian foods";
   const from = product
     ? `From ${formatPaise(Math.min(...product.variants.map((v) => v.pricePaise)))}`
     : "";

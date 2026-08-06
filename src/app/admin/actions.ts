@@ -11,7 +11,10 @@ import {
 import { getOrderById } from "@/db/queries/orders";
 import { moderateReview } from "@/db/queries/reviews";
 import { createCoupon, setCouponActive } from "@/db/queries/coupons";
+import { decideReturn, type ReturnStatus } from "@/db/queries/returns";
+import { recordAdminAction } from "@/db/queries/audit";
 import { buildOrderShippedEmail } from "@/emails/order-shipped";
+import { buildReturnDecisionEmail } from "@/emails/return-decision";
 import { notifyBackInStock } from "@/lib/back-in-stock";
 import { sendAndLog } from "@/lib/mail";
 import { revalidateCatalog, revalidateReviews } from "@/lib/revalidate";
@@ -82,6 +85,19 @@ export async function updateOrderStatusAction(
       }
     }
 
+    await recordAdminAction({
+      actor: userId,
+      action: result.changed ? "order.status" : "order.tracking",
+      entityType: "order",
+      entityId: orderId,
+      summary: result.changed
+        ? `Order ${orderId.slice(-8).toUpperCase()}: ${result.previous} → ${status}`
+        : `Order ${orderId.slice(-8).toUpperCase()}: tracking updated`,
+      detail: result.changed
+        ? { status: { from: result.previous, to: status } }
+        : null,
+    });
+
     revalidatePath("/admin");
 
     return {
@@ -105,7 +121,7 @@ export async function updateStockAction(
   _previous: ActionResult | null,
   formData: FormData,
 ): Promise<ActionResult> {
-  await requireAdmin();
+  const { userId } = await requireAdmin();
 
   const parsed = stockSchema.safeParse({
     variantId: formData.get("variantId"),
@@ -148,6 +164,15 @@ export async function updateStockAction(
       }
     }
 
+    await recordAdminAction({
+      actor: userId,
+      action: "variant.stock",
+      entityType: "variant",
+      entityId: parsed.data.variantId,
+      summary: `Stock ${result.previous} → ${result.next}`,
+      detail: { stockQty: { from: result.previous, to: result.next } },
+    });
+
     return {
       ok: true,
       message: `Stock set to ${parsed.data.stockQty}.${notified}`,
@@ -180,7 +205,7 @@ export async function moderateReviewAction(
   _previous: ActionResult | null,
   formData: FormData,
 ): Promise<ActionResult> {
-  await requireAdmin();
+  const { userId } = await requireAdmin();
 
   const parsed = moderationSchema.safeParse({
     id: formData.get("id"),
@@ -199,6 +224,18 @@ export async function moderateReviewAction(
       parsed.data.note || null,
     );
     if (!changed) return { ok: false, message: "Review not found." };
+
+    await recordAdminAction({
+      actor: userId,
+      action: `review.${parsed.data.status}`,
+      entityType: "review",
+      entityId: parsed.data.id,
+      summary: `Review ${parsed.data.status}`,
+      // The moderator's note, but never the review body. The review is in
+      // the reviews table; copying somebody's words into a second table is
+      // a second place they have to be erased from.
+      detail: parsed.data.note ? { note: parsed.data.note } : null,
+    });
 
     revalidateReviews();
     revalidatePath("/admin/reviews");
@@ -254,7 +291,7 @@ export async function createCouponAction(
   _previous: ActionResult | null,
   formData: FormData,
 ): Promise<ActionResult> {
-  await requireAdmin();
+  const { userId } = await requireAdmin();
 
   const parsed = couponSchema.safeParse(
     Object.fromEntries(formData.entries()),
@@ -289,6 +326,21 @@ export async function createCouponAction(
       perCustomerLimit: input.perCustomerLimit ?? 1,
     });
 
+    await recordAdminAction({
+      actor: userId,
+      action: "coupon.create",
+      entityType: "coupon",
+      entityId: input.code,
+      summary: `Created ${input.code} — ${input.description}`,
+      detail: {
+        kind: input.kind,
+        percent: input.percent ?? null,
+        amountRupees: input.amountRupees ?? null,
+        minSubtotalRupees: input.minSubtotalRupees ?? 0,
+        globalLimit: input.globalLimit ?? null,
+      },
+    });
+
     revalidatePath("/admin/coupons");
     return { ok: true, message: `${input.code} created and live.` };
   } catch (error) {
@@ -304,7 +356,7 @@ export async function toggleCouponAction(
   _previous: ActionResult | null,
   formData: FormData,
 ): Promise<ActionResult> {
-  await requireAdmin();
+  const { userId } = await requireAdmin();
 
   const id = Number(formData.get("id"));
   const active = formData.get("active") === "1";
@@ -316,6 +368,14 @@ export async function toggleCouponAction(
     const changed = await setCouponActive(id, active);
     if (!changed) return { ok: false, message: "Coupon not found." };
 
+    await recordAdminAction({
+      actor: userId,
+      action: active ? "coupon.enable" : "coupon.disable",
+      entityType: "coupon",
+      entityId: id,
+      summary: `Coupon switched ${active ? "on" : "off"}`,
+    });
+
     revalidatePath("/admin/coupons");
     return {
       ok: true,
@@ -326,5 +386,128 @@ export async function toggleCouponAction(
   } catch (error) {
     console.error("[admin] coupon toggle failed:", error);
     return { ok: false, message: "Could not change that." };
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Returns                                                             */
+
+const returnSchema = z.object({
+  id: z.coerce.number().int().positive(),
+  status: z.enum(["approved", "rejected", "received", "refunded"]),
+  resolution: z.string().trim().max(1000).optional().or(z.literal("")),
+});
+
+/**
+ * Deciding a return.
+ *
+ * Declining one requires a reason. That is not politeness for its own sake:
+ * a refusal with no explanation is what turns a return into a chargeback,
+ * and the customer is going to ask anyway — better in the email they
+ * already have than in a support thread three days later.
+ *
+ * The email is sent after the transaction commits and its failure is
+ * reported rather than thrown. A decision that is recorded but not
+ * delivered is recoverable; one that is rolled back because the mail server
+ * was down leaves the owner thinking they have dealt with it.
+ */
+export async function decideReturnAction(
+  _previous: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  const { userId } = await requireAdmin();
+
+  const parsed = returnSchema.safeParse({
+    id: formData.get("id"),
+    status: formData.get("status"),
+    resolution: formData.get("resolution"),
+  });
+  if (!parsed.success) {
+    return { ok: false, message: "Could not read that decision." };
+  }
+
+  const { id, status } = parsed.data;
+  const resolution = parsed.data.resolution || null;
+
+  if (status === "rejected" && !resolution) {
+    return {
+      ok: false,
+      message: "Say why. The customer is told this, and 'no' on its own is not an answer.",
+    };
+  }
+
+  try {
+    const result = await decideReturn({
+      id,
+      status: status as ReturnStatus,
+      resolution,
+      actor: `admin:${userId}`,
+    });
+
+    if (!result.ok) {
+      return {
+        ok: false,
+        message:
+          result.reason === "not_found"
+            ? "That return no longer exists."
+            : `This return is already ${result.from}, and that cannot be undone from here.`,
+      };
+    }
+
+    await recordAdminAction({
+      actor: userId,
+      action: `return.${status}`,
+      entityType: "return",
+      entityId: id,
+      summary: `Return on ${result.orderId.slice(-8).toUpperCase()}: ${result.previous} → ${status}`,
+      detail: {
+        status: { from: result.previous, to: status },
+        orderMarkedRefunded: result.orderMarkedRefunded,
+      },
+    });
+
+    let emailNote = "";
+    const message = buildReturnDecisionEmail({
+      status: status as ReturnStatus,
+      orderId: result.orderId,
+      customerName: result.customerName,
+      customerEmail: result.customerEmail,
+      totalPaise: result.totalPaise,
+      resolution,
+      appUrl,
+    });
+
+    if (message) {
+      try {
+        const mail = await sendAndLog(
+          `return_${status}`,
+          message,
+          result.orderId,
+        );
+        emailNote =
+          mail.status === "sent"
+            ? " The customer has been emailed."
+            : mail.status === "skipped_no_smtp"
+              ? " Email logged only — no SMTP configured, so tell them yourself."
+              : " The email failed to send — see email_log, and tell them yourself.";
+      } catch (error) {
+        console.error("[admin] return decision email failed:", error);
+        emailNote = " Saved, but the email did not send.";
+      }
+    }
+
+    revalidatePath("/admin/returns");
+    revalidatePath("/admin");
+
+    return {
+      ok: true,
+      message:
+        (result.orderMarkedRefunded
+          ? "Marked refunded, and the order's payment status with it."
+          : `Marked ${status}.`) + emailNote,
+    };
+  } catch (error) {
+    console.error("[admin] return decision failed:", error);
+    return { ok: false, message: "Could not save that decision." };
   }
 }

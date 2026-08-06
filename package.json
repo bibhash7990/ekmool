@@ -15,6 +15,7 @@
     "chaos": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/chaos.mjs",
     "validate:schema": "node scripts/validate-seo.mjs",
     "test:account": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/test-account.mjs",
+    "test:admin": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --conditions react-server --import ./scripts/register-alias.mjs scripts/test-admin.mjs",
     "test:checkout": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/test-checkout.mjs",
     "test:commerce": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/test-commerce.mjs",
     "test:consent": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/test-consent.mjs",

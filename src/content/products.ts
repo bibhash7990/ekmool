@@ -316,3 +316,57 @@ export const PRODUCT_CONTENT: Record<string, ProductContent> = {
 export function getProductContent(slug: string): ProductContent | null {
   return PRODUCT_CONTENT[slug] ?? null;
 }
+
+/**
+ * A page for a product that has no editorial entry here.
+ *
+ * The five launch products carry hand-written copy above and always will —
+ * a generated origin story would be worse than the one somebody wrote. But
+ * a product added from the admin has none of this, and until M14 that meant
+ * the page 404'd: the owner could create a product they could not sell.
+ * Derived copy is the difference between a shorter page and no page.
+ *
+ * What is derived is only what the database already knows to be true: the
+ * name, the description the owner typed, the origin, the GI tag, the packs.
+ * Nothing is invented. In particular **the FAQ is empty**, not filled with
+ * plausible questions nobody asked — a fabricated Q&A would be published as
+ * FAQPage structured data, which is a Google spam-policy violation and,
+ * more to the point, a lie about what customers have asked.
+ */
+export function fallbackContent(product: {
+  name: string;
+  shortDescription: string;
+  originState: string;
+  giTagName: string;
+  seoTitle: string | null;
+  seoDescription: string | null;
+  variants: { packSizeLabel: string; packSizeGrams: number }[];
+}): ProductContent {
+  const packs = product.variants.map((variant) => variant.packSizeLabel);
+
+  return {
+    // The owner's SEO fields when they filled them in; the honest fallback
+    // when they did not. Both are real strings — never a truncated
+    // description ending mid-word, which is what a naive slice produces.
+    titleTag: product.seoTitle ?? product.name,
+    metaDescription:
+      product.seoDescription ??
+      `${product.shortDescription} ${product.giTagName} from ${product.originState}, sold in ${packs.length || 1} pack size${packs.length === 1 ? "" : "s"}.`.slice(
+        0,
+        180,
+      ),
+    h1: product.name,
+    tagline: product.shortDescription,
+    keywords: [],
+    faq: [],
+    heroArtDirection: `${product.name} — pack photographed on a plain surface in daylight`,
+    useNote: `${product.giTagName}, from ${product.originState}. Store airtight, away from heat and direct light.`,
+    specs: [
+      { label: "Origin", value: product.originState },
+      { label: "GI tag", value: product.giTagName },
+      ...(packs.length > 0
+        ? [{ label: "Pack sizes", value: packs.join(" · ") }]
+        : []),
+    ],
+  };
+}

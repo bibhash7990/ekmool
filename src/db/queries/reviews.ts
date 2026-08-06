@@ -230,6 +230,67 @@ export const getProductReviews = unstable_cache(
 );
 
 /* ------------------------------------------------------------------ */
+/* The home page                                                       */
+
+export interface RecentReview extends Review {
+  productName: string;
+}
+
+interface RecentReviewRow extends ReviewRow {
+  product_name: string;
+}
+
+/**
+ * The most recent published reviews across the whole catalogue.
+ *
+ * Cached and tagged like everything else the storefront reads, so the home
+ * page stays static and browsing still never touches MySQL — the property
+ * scripts/chaos.mjs asserts.
+ *
+ * Returns an empty array when nothing has been published, and the caller
+ * renders **nothing at all** in that case. Not a placeholder, not "reviews
+ * coming soon", not a row of empty stars. An empty state is honest; an
+ * invented one is fraud that happens to be easy.
+ *
+ * Joined to products so an archived one drops out: a quote about something
+ * nobody can buy is a dead end on the busiest page of the site.
+ */
+async function loadRecentReviews(limit = 3): Promise<RecentReview[]> {
+  const pool = getPool();
+  // LIMIT is interpolated (after clamping to an integer) because MySQL will
+  // not accept a placeholder there in a prepared statement. Nothing from a
+  // request reaches it — the value is arithmetic, not text.
+  const capped = Math.min(Math.max(Math.floor(limit), 1), 12);
+
+  const [rows] = await pool.query<RecentReviewRow[]>(
+    `SELECT r.id, r.product_slug, r.display_name, r.rating, r.title, r.body,
+            r.created_at, p.name AS product_name
+       FROM reviews r
+       JOIN products p ON p.slug = r.product_slug
+      WHERE r.status = 'published' AND p.is_active = 1
+      ORDER BY r.published_at DESC, r.id DESC
+      LIMIT ${capped}`,
+  );
+
+  return rows.map((row) => ({
+    id: row.id,
+    productSlug: row.product_slug,
+    displayName: row.display_name,
+    rating: row.rating,
+    title: row.title,
+    body: row.body,
+    createdAt: row.created_at,
+    productName: row.product_name,
+  }));
+}
+
+export const getRecentReviews = unstable_cache(
+  loadRecentReviews,
+  ["recent-reviews"],
+  { tags: [REVIEWS_TAG], revalidate: REVALIDATE_SECONDS },
+);
+
+/* ------------------------------------------------------------------ */
 /* Moderation                                                          */
 
 export interface PendingReview extends Review {

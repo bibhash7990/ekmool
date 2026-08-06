@@ -137,6 +137,12 @@ jobs:
       - name: Admin
         run: npm run test:admin
 
+      # Runs early, and before anything that publishes a review: its
+      # empty-state check only means something while the reviews table is
+      # still empty, and it says so rather than failing if it is not.
+      - name: Home page
+        run: npm run test:home 3100
+
       - name: Checkout
         run: npm run test:checkout 3100
 

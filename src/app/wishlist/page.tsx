@@ -4,6 +4,7 @@ import { getCatalog } from "@/db/queries/products";
 import { getProductContent } from "@/content/products";
 import { getCustomerEmail } from "@/lib/account";
 import { ProductCard } from "@/components/product/ProductCard";
+import { WishlistButton } from "@/components/wishlist/WishlistButton";
 import {
   WishlistView,
   type WishlistEntry,
@@ -45,6 +46,9 @@ export default async function WishlistPage() {
       node: (
         <ProductCard
           product={product}
+          action={
+            <WishlistButton slug={product.slug} productName={product.name} />
+          }
           artDirection={
             content?.heroArtDirection ??
             `Product photography for ${product.name}: overhead, warm natural light, regional props only.`

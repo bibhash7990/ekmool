@@ -5,6 +5,7 @@ import { getCatalog, type Product } from "@/db/queries/products";
 import { getProductContent } from "@/content/products";
 import { searchCatalog, suggestCorrection } from "@/lib/search";
 import { ProductCard } from "@/components/product/ProductCard";
+import { WishlistButton } from "@/components/wishlist/WishlistButton";
 import { SearchForm } from "@/components/search/SearchForm";
 import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
 import { Eyebrow } from "@/components/ui/Eyebrow";
@@ -40,6 +41,12 @@ function ResultGrid({ products }: { products: Product[] }) {
           <li key={product.slug} className="h-full">
             <ProductCard
               product={product}
+              action={
+                <WishlistButton
+                  slug={product.slug}
+                  productName={product.name}
+                />
+              }
               artDirection={
                 content?.heroArtDirection ??
                 `Product photography for ${product.name}: overhead, warm natural light, regional props only.`

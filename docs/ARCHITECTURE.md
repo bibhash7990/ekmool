@@ -46,6 +46,20 @@ Before adding a query to a page, ask which row it is in. If the answer is
 one of the first three, the data belongs in the cached catalogue or it
 belongs in a client component that fetches it after paint.
 
+**The home page is the worked example.** Until M16 it read nothing and was
+immune to a database outage for free. It now shows live prices and real
+reviews, which meant two reads — and both go through `unstable_cache` with
+a tag (`getCatalog`, `getRecentReviews`), so the page is still built once
+and served from static output. `test:db-down` asserts `/` still returns 200
+with MySQL stopped; `chaos` puts it in the traffic mix during an outage and
+asserts zero browse failures.
+
+What it did cost: `/` joined `/products` and `/sitemap.xml` in the set of
+pages a **hard purge immediately before an outage** takes offline, because
+`revalidateTag(tag, "max")` expires rather than marks stale. That is a
+real, small, understood price for showing a price, and it is written down
+in the README rather than discovered during an incident.
+
 ---
 
 ## Caching, and the trap in it

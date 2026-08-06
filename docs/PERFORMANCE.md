@@ -35,6 +35,41 @@ fails if any counted script came from the worker. Lighthouse registers it on
 `load`, after the trace window, so none do — but that is asserted, not
 assumed.
 
+### The total is noisy by about 9 KB. The chunk list is not.
+
+Next prefetches the routes it finds links to — the header's cart link,
+mainly — at Low priority. Chrome reports those responses with a
+`transferSize` of 0 on some runs and their real bytes on others, on the
+same build. Three consecutive runs of an unchanged home page in M16 gave
+**189, 188 and 178 KB**.
+
+So a total that jumps ~9 KB is not evidence of anything. Before believing a
+regression, compare the *list* of chunks the page pulls:
+
+```bash
+node -e "const r=require('./research/audits/lh-home.json'); console.log(r.audits['network-requests'].details.items.filter(i=>i.resourceType==='Script').map(i=>[i.url.split('/').pop(), i.transferSize]))"
+```
+
+A real regression adds a **filename**. That is how the wishlist chunk was
+caught arriving on the home page in M16: the total looked plausible, and
+the list had one entry too many.
+
+### A client component costs its route even if it never renders
+
+`ProductCard` used to import `WishlistButton` and hide it behind a
+`showWishlist` prop. The home page passed `false`, rendered no save
+control — and still shipped the 2.9 KB wishlist store, because a client
+component referenced anywhere in a route's server tree is bundled for that
+route whether it renders or not.
+
+A boolean cannot fix that. The component has to be *passed in*, so the
+import lives at the call site:
+
+```tsx
+<ProductCard product={product} action={<WishlistButton … />} />   // /products
+<ProductCard product={product} />                                  // home
+```
+
 ---
 
 ## Where the bytes go, and how to not spend them

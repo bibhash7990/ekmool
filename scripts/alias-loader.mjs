@@ -24,7 +24,24 @@ const SRC = new URL("../src/", import.meta.url);
 /** Node needs a real file; `@/db/pool` names one four different ways. */
 const CANDIDATES = ["", ".ts", ".tsx", ".mts", "/index.ts", "/index.tsx"];
 
+/**
+ * Next subpaths its package exports map for a bundler but that Node cannot
+ * resolve on its own. `next/cache` is the one that matters: every cached
+ * query module imports `unstable_cache` from it, so without this line a
+ * script can reach src/lib but not src/db/queries — which is most of the
+ * application.
+ *
+ * Mapped to the real file rather than stubbed. A stub would let a test go
+ * green while the caching behaviour underneath it went unexercised, and
+ * the tag a query registers under is exactly the sort of thing worth
+ * getting wrong loudly.
+ */
+const NEXT_SUBPATHS = new Map([["next/cache", "next/cache.js"]]);
+
 export async function resolve(specifier, context, next) {
+  const mapped = NEXT_SUBPATHS.get(specifier);
+  if (mapped) return next(mapped, context);
+
   if (!specifier.startsWith("@/")) return next(specifier, context);
 
   const stem = specifier.slice(2);

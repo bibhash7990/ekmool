@@ -18,7 +18,7 @@ const port = process.argv[2] ?? process.env.PORT ?? "3100";
 const base = `http://localhost:${port}`;
 
 const PAGES = [
-  { path: "/", types: ["Organization", "WebSite"] },
+  { path: "/", types: ["Organization", "WebSite", "ItemList"] },
   { path: "/products", types: ["Organization", "WebSite", "BreadcrumbList"] },
   {
     path: "/products/kandhamal-turmeric-powder",

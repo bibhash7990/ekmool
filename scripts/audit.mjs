@@ -66,6 +66,26 @@ const THRESHOLDS = {
  *
  * Headroom is deliberately thin on every line above. A generous budget
  * catches nothing, which is the only thing a budget is for.
+ *
+ * **One number here is noisy, and you need to know how.** Next prefetches
+ * the routes it finds links to — the header's cart link, mainly — at Low
+ * priority. Chrome sometimes reports those responses with transferSize 0
+ * and a full resourceSize, and sometimes with their real bytes, and which
+ * way it goes changes between runs on the same build. Measured at M16:
+ * three consecutive runs of an unchanged home page gave 189, 188 and 178.
+ *
+ * So a total that jumps ~9 KB is not evidence of anything on its own.
+ * Before believing a regression, compare the *list* of chunks the page
+ * pulls, not the sum:
+ *
+ *   node -e "const r=require('./research/audits/lh-home.json');
+ *     console.log(r.audits['network-requests'].details.items
+ *       .filter(i=>i.resourceType==='Script')
+ *       .map(i=>[i.url.split('/').pop(), i.transferSize]))"
+ *
+ * A real regression adds a filename. That is how the wishlist chunk was
+ * caught arriving on the home page in M16 — the total looked plausible,
+ * the list had one entry too many.
  */
 
 const results = [];

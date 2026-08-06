@@ -131,6 +131,7 @@ the difference between a green tick and evidence.
 | `npm run test:discovery` | Search ranking and synonyms, filters, PIN code estimates, wishlist scoping, back-in-stock |
 | `npm run test:promotions` | Coupon arithmetic, caps under concurrency, GST on a discounted line, verified-buyer reviews, newsletter double opt-in, share cards |
 | `npm run test:admin` | CSV escaping and formula injection, presigned uploads, product CRUD and what it refuses, report arithmetic, return transitions, the audit log |
+| `npm run test:home` | Home page prices reconcile to the database, delivery terms to the shipping constants, and the review section appears only when a real review is published (run it before anything that publishes one) |
 | `npm run test:offline` | The service worker's exclusion list, manifest installability, the CSP directives a PWA needs, and the shared rate limiter |
 | `npm run test:db-down` | Browsing with MySQL stopped (stop it first) |
 | `npm run test:jobs` | Cron authorisation, stale-order cancel, reminder dedupe |
@@ -146,12 +147,19 @@ the difference between a green tick and evidence.
 before stopping MySQL — and not straight after `chaos` or `test:admin`. Both
 of those end by purging the catalogue tag, and `revalidateTag(tag, "max")`
 expires an entry rather than marking it stale. An expired static page with
-no database to regenerate from has nothing to serve, so `/products` and
-`/sitemap.xml` answer 500 instead of the cached copy. That is the honest
-cost of a hard purge and worth knowing before an outage: **do not force a
-revalidation and then take the database down.** Product pages are unaffected
-— they are prerendered and keep a copy either way, which is what `chaos`
-section 1b asserts.
+no database to regenerate from has nothing to serve, so `/`, `/products`
+and `/sitemap.xml` answer 500 instead of the cached copy. That is the
+honest cost of a hard purge and worth knowing before an outage: **do not
+force a revalidation and then take the database down.** Product pages are
+unaffected — they are prerendered and keep a copy either way, which is what
+`chaos` section 1b asserts.
+
+The home page joined that list in M16, when it started showing live prices.
+Measured then: from a warm cache, `chaos` reports zero browse failures
+across a full MySQL outage with the home page in the traffic mix; from a
+cache purged seconds earlier, roughly 4.6% of browse requests fail, and
+they are all `/` and `/products`. The fix is not to stop showing prices —
+it is not to hard-purge into an outage.
 
 ---
 

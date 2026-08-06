@@ -113,6 +113,7 @@ A change is finished when all of these are true. Not most.
 | `test:discovery` | Search ranking, filters, PIN estimates, wishlist scoping |
 | `test:promotions` | Coupon arithmetic and caps, GST on a discounted line, reviews |
 | `test:admin` | CSV escaping, presigned uploads, product CRUD, reports, audit log |
+| `test:home` | Home prices match the database, shipping terms match the constants, reviews appear only when real |
 | `test:offline` | Service worker exclusions, manifest, PWA CSP, shared limiter |
 | `test:jobs` | Cron auth, stale-order cancel, reminder dedupe |
 | `chaos` | MySQL killed under live traffic |
@@ -123,7 +124,14 @@ Most need a running server (`npm run standalone:start`). `test:admin` needs
 only the database. **Run `test:db-down` from a warm cache**, and not
 straight after `chaos` or `test:admin` — both end by hard-purging the
 catalogue tag, and an expired static page with no database has nothing to
-serve.
+serve. Since M16 the home page reads the catalogue too, so it is in that
+set: `/`, `/products` and `/sitemap.xml` are the three pages a hard purge
+takes offline for the length of an outage.
+
+Run `test:home` before anything that publishes a review. Its empty-state
+check — that no review section renders at all when none exist — can only
+be made while the table is empty, and the suite skips that check with a
+note rather than failing if something has already published one.
 
 Suites are **not parallel-safe**: several drive checkout through the same
 rate limiter, and running them together produces 429s that look like

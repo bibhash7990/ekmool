@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ProductReviews as ProductReviewsData } from "@/db/queries/reviews";
 import { Eyebrow } from "@/components/ui/Eyebrow";
+import { Stars } from "./Stars";
 import { ReviewForm } from "./ReviewForm";
 
 /**
@@ -12,29 +13,6 @@ import { ReviewForm } from "./ReviewForm";
  * (0)". A zero next to five stars reads as a bad score, and a shop with a
  * new product has not earned a bad score. It has earned silence.
  */
-
-function Stars({ rating }: { rating: number }) {
-  const filled = Math.round(rating);
-  return (
-    <span
-      className="inline-flex gap-0.5 align-middle"
-      role="img"
-      aria-label={`${rating} out of 5`}
-    >
-      {[1, 2, 3, 4, 5].map((position) => (
-        <svg
-          key={position}
-          viewBox="0 0 20 20"
-          className={`size-4 ${position <= filled ? "text-ek-gold-600" : "text-ek-green-200"}`}
-          fill="currentColor"
-          aria-hidden="true"
-        >
-          <path d="M10 1.6l2.5 5.3 5.7.8-4.1 4 1 5.7L10 14.7 4.9 17.4l1-5.7-4.1-4 5.7-.8z" />
-        </svg>
-      ))}
-    </span>
-  );
-}
 
 export function ProductReviews({
   productSlug,

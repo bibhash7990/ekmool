@@ -86,7 +86,23 @@ to `max-w-[720px]`.
 perfectly even split reads as a template.
 
 `<SoilLine />` separates major sections — a hand-drawn horizon rule, not a
-`<hr>`. Use it between sections, never inside one.
+`<hr>`. Use it between sections, never inside one. Once per page: it is a
+signature, and a signature repeated eight times is wallpaper.
+
+**A long page alternates its field.** With eleven sections the home page
+cannot rely on whitespace alone — four `bg-ek-paper` sections in a row read
+as one very long section. The rhythm is:
+
+| Field | Used for |
+|---|---|
+| `bg-ek-paper` (default) | editorial sections — origins, process, the GI explainer, the journal |
+| `bg-ek-cream` + `border-y border-ek-green-200` | commerce and utility — the shelf, delivery and payment |
+| `grain-dark bg-ek-green-950` | exactly one band per page, the argument the brand is making |
+
+Never two cream sections adjacent, and check the rhythm still holds with
+**conditional sections absent** — the home page's review section renders
+nothing until a real review exists, and a page that only looks right when
+it is present is a page that looks wrong on launch day.
 
 ---
 
@@ -173,7 +189,15 @@ The voice is plain, specific and unhurried. It names things.
 
 - **Never fabricate social proof.** No seeded reviews, no invented ratings,
   no "3 left!" unless the stock number is literally 3. A product nobody has
-  reviewed shows no rating at all — not a zero.
+  reviewed shows no rating at all — not a zero. The same rule applies to
+  the *shape* of proof: the home page's review section returns `null` when
+  there is nothing to show, rather than rendering a heading over a row of
+  grey stars. `test:home` asserts both directions.
+- **State the limits of your own credential.** The GI explainer on the home
+  page has a "what it does not tell you" column — that the tag is not an
+  organic certificate, not a grade, and not a health claim. A shop that
+  will say that about its own badge is easier to believe about everything
+  else, and every word of it is true.
 - **Say what happens next.** "Waiting to be sent" beats "Thank you for your
   order" when the order has not been sent.
 - **Refusals give the reason and the rule.** "That code needs a basket of at

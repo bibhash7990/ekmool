@@ -2,6 +2,7 @@ import type { Product } from "@/db/queries/products";
 import { getProductContent } from "@/content/products";
 import { relatedProducts } from "@/lib/related";
 import { ProductCard } from "./ProductCard";
+import { WishlistButton } from "@/components/wishlist/WishlistButton";
 import { Eyebrow } from "@/components/ui/Eyebrow";
 
 /**
@@ -38,6 +39,12 @@ export function RelatedProducts({
               <ProductCard
                 product={product}
                 note={reason}
+                action={
+                  <WishlistButton
+                    slug={product.slug}
+                    productName={product.name}
+                  />
+                }
                 artDirection={
                   content?.heroArtDirection ??
                   `Product photography for ${product.name}: overhead, warm natural light, regional props only.`

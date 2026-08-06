@@ -5,6 +5,7 @@ import { getCatalog } from "@/db/queries/products";
 import { getProductContent } from "@/content/products";
 import { familyOf } from "@/lib/related";
 import { ProductCard } from "@/components/product/ProductCard";
+import { WishlistButton } from "@/components/wishlist/WishlistButton";
 import { CatalogGrid, type CatalogItem } from "@/components/product/CatalogGrid";
 import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
 import { Eyebrow } from "@/components/ui/Eyebrow";
@@ -43,6 +44,12 @@ export default async function ProductsPage() {
       node: (
         <ProductCard
           product={product}
+          action={
+            <WishlistButton
+              slug={product.slug}
+              productName={product.name}
+            />
+          }
           artDirection={
             content?.heroArtDirection ??
             `Product photography for ${product.name}: overhead, warm natural light, regional props only.`

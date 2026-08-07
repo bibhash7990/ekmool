@@ -41,6 +41,15 @@ const dbSchema = z.object({
 
 export type DbConfig = z.infer<typeof dbSchema>;
 
+/**
+ * Whether to negotiate TLS to MySQL. Opt-in: every managed provider
+ * requires it, and the local Docker container has no certificate to
+ * present, so neither default is right for both.
+ */
+export const dbSsl: boolean = /^(1|true|yes)$/i.test(
+  str(process.env.DATABASE_SSL),
+);
+
 export function getDbConfig(): DbConfig | null {
   const parsed = dbSchema.safeParse({
     host: str(process.env.DATABASE_HOST),

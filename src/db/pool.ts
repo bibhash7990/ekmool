@@ -1,5 +1,5 @@
 import mysql from "mysql2/promise";
-import { getDbConfig } from "@/lib/env";
+import { dbSsl, getDbConfig } from "@/lib/env";
 
 /**
  * Shared connection pool singleton. Cached on globalThis so dev HMR does
@@ -30,6 +30,16 @@ export function getPool(): mysql.Pool {
     user: config.user,
     password: config.password,
     database: config.database,
+    // Managed MySQL (Aiven, PlanetScale, RDS) refuses a plaintext
+    // connection; the local Docker container has no certificate and
+    // refuses a TLS one. So this is opt-in rather than inferred: set
+    // DATABASE_SSL=true in the hosted environment and leave it unset in
+    // development, where `npm run db:up` is the only database.
+    //
+    // `minVersion` rather than `rejectUnauthorized: false` — disabling
+    // verification would accept any certificate and hand a man in the
+    // middle every order and address that crosses this pool.
+    ...(dbSsl ? { ssl: { minVersion: "TLSv1.2" as const } } : {}),
     connectionLimit: 20,
     queueLimit: 100,
     waitForConnections: true,

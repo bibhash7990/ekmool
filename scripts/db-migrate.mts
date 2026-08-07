@@ -24,6 +24,12 @@ async function main(): Promise<void> {
     password: process.env.DATABASE_PASSWORD ?? "",
     database: process.env.DATABASE_NAME ?? "ekmool",
     multipleStatements: true,
+    // Same opt-in switch the app pool uses: a managed provider refuses
+    // plaintext, the local Docker container refuses TLS. Without this the
+    // runner cannot migrate the database it is being deployed against.
+    ...(/^(1|true|yes)$/i.test((process.env.DATABASE_SSL ?? "").trim())
+      ? { ssl: { minVersion: "TLSv1.2" as const } }
+      : {}),
   });
 
   try {

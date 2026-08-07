@@ -24,7 +24,6 @@ services:
     # NOT the `runner` stage: that one expects its build to arrive on a
     # shared compose volume, which Render has no equivalent for. It would
     # start with an empty /app/dist and crash.
-    dockerTarget: standalone
     region: singapore # closest Render region to India
     plan: starter # free tier sleeps after 15 min — wrong for a shop
     healthCheckPath: /api/health
@@ -149,18 +148,17 @@ services:
     name: ekmool-abandoned-payment-reminder
     runtime: docker
     dockerfilePath: ./Dockerfile
-    dockerTarget: standalone
     region: singapore
     plan: starter
     schedule: "0 * * * *"
     dockerCommand: >-
-      node -e "fetch('https://'+process.env.APP_URL+'/api/jobs/abandoned-payment-reminder',{method:'POST',headers:{'x-cron-secret':process.env.CRON_SECRET}}).then(r=>{console.log(r.status);process.exit(r.ok?0:1)}).catch(e=>{console.error(e);process.exit(1)})"
+      node -e "fetch('http://'+process.env.APP_URL+'/api/jobs/abandoned-payment-reminder',{method:'POST',headers:{'x-cron-secret':process.env.CRON_SECRET}}).then(r=>{console.log(r.status);process.exit(r.ok?0:1)}).catch(e=>{console.error(e);process.exit(1)})"
     envVars:
       - key: APP_URL
         fromService:
           name: ekmool
           type: web
-          property: host
+          property: hostport
       - key: CRON_SECRET
         fromService:
           name: ekmool
@@ -171,18 +169,17 @@ services:
     name: ekmool-low-stock-report
     runtime: docker
     dockerfilePath: ./Dockerfile
-    dockerTarget: standalone
     region: singapore
     plan: starter
     schedule: "30 2 * * *"
     dockerCommand: >-
-      node -e "fetch('https://'+process.env.APP_URL+'/api/jobs/low-stock-report',{method:'POST',headers:{'x-cron-secret':process.env.CRON_SECRET}}).then(r=>{console.log(r.status);process.exit(r.ok?0:1)}).catch(e=>{console.error(e);process.exit(1)})"
+      node -e "fetch('http://'+process.env.APP_URL+'/api/jobs/low-stock-report',{method:'POST',headers:{'x-cron-secret':process.env.CRON_SECRET}}).then(r=>{console.log(r.status);process.exit(r.ok?0:1)}).catch(e=>{console.error(e);process.exit(1)})"
     envVars:
       - key: APP_URL
         fromService:
           name: ekmool
           type: web
-          property: host
+          property: hostport
       - key: CRON_SECRET
         fromService:
           name: ekmool
@@ -193,18 +190,17 @@ services:
     name: ekmool-cancel-stale-orders
     runtime: docker
     dockerfilePath: ./Dockerfile
-    dockerTarget: standalone
     region: singapore
     plan: starter
     schedule: "0 3 * * *"
     dockerCommand: >-
-      node -e "fetch('https://'+process.env.APP_URL+'/api/jobs/cancel-stale-orders',{method:'POST',headers:{'x-cron-secret':process.env.CRON_SECRET}}).then(r=>{console.log(r.status);process.exit(r.ok?0:1)}).catch(e=>{console.error(e);process.exit(1)})"
+      node -e "fetch('http://'+process.env.APP_URL+'/api/jobs/cancel-stale-orders',{method:'POST',headers:{'x-cron-secret':process.env.CRON_SECRET}}).then(r=>{console.log(r.status);process.exit(r.ok?0:1)}).catch(e=>{console.error(e);process.exit(1)})"
     envVars:
       - key: APP_URL
         fromService:
           name: ekmool
           type: web
-          property: host
+          property: hostport
       - key: CRON_SECRET
         fromService:
           name: ekmool
@@ -219,6 +215,9 @@ services:
   - type: keyvalue
     name: ekmool-redis
     region: singapore
-    plan: starter
+    # plan is deliberately omitted: Key Value plans are a different set from
+    # web-service plans, and the spec does not document their identifiers.
+    # Render applies its default and you pick the size in the dashboard —
+    # better than guessing a name that invalidates the whole blueprint.
     maxmemoryPolicy: noeviction
     ipAllowList: [] # reachable only from inside Render

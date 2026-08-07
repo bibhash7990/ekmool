@@ -88,7 +88,12 @@ CMD ["node", "server.js"]
 # to env for the build step only — they are not persisted into the final
 # layer, so the image itself carries no credentials.
 #
-# Compose is unaffected: it targets `runner`, which is untouched.
+# Compose is unaffected: it names `target: runner` explicitly.
+#
+# KEEP THESE TWO STAGES LAST. Render's blueprint spec has no field for
+# selecting a build target — `dockerTarget` is not real, and passing it
+# makes the blueprint invalid — so Render builds whatever stage ends the
+# file. Adding a stage below this one would silently ship it instead.
 FROM base AS standalone-builder
 
 COPY --from=deps /app/node_modules ./node_modules

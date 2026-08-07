@@ -41,6 +41,33 @@ const dbSchema = z.object({
 
 export type DbConfig = z.infer<typeof dbSchema>;
 
+/**
+ * Whether to negotiate TLS to MySQL. Opt-in: every managed provider
+ * requires it, and the local Docker container has no certificate to
+ * present, so neither default is right for both.
+ */
+export const dbSsl: boolean = /^(1|true|yes)$/i.test(
+  str(process.env.DATABASE_SSL),
+);
+
+/**
+ * PEM for providers that sign with their own CA rather than a public root.
+ * Aiven issues a per-project CA, so Node's bundled trust store rejects the
+ * certificate and the handshake fails with HANDSHAKE_SSL_ERROR — measured,
+ * not assumed: the same connection succeeds with the PEM and fails without.
+ *
+ * Read as an env var rather than a checked-in file because it is per
+ * project, and because a certificate committed to the repository is one
+ * rotation away from being silently wrong.
+ *
+ * Escaped newlines are unescaped so the PEM survives a single-line env var,
+ * which is the only shape Vercel's dashboard accepts.
+ */
+export const dbSslCa: string = str(process.env.DATABASE_SSL_CA).replace(
+  /\\n/g,
+  "\n",
+);
+
 export function getDbConfig(): DbConfig | null {
   const parsed = dbSchema.safeParse({
     host: str(process.env.DATABASE_HOST),

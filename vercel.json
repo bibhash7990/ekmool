@@ -3,7 +3,7 @@
   "crons": [
     {
       "path": "/api/jobs/abandoned-payment-reminder",
-      "schedule": "0 * * * *"
+      "schedule": "0 2 * * *"
     },
     {
       "path": "/api/jobs/low-stock-report",

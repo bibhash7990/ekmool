@@ -16,11 +16,20 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 /**
- * Hourly: chase orders whose online payment never completed.
+ * Chase orders whose online payment never completed.
  *
  * At most one reminder per order, guaranteed twice over — the atomic
  * claim on reminder_sent_at, and an email_log check in case the column
  * was ever reset by hand.
+ *
+ * This wants to run hourly and does under docker-compose. On Vercel it is
+ * daily (vercel.json), because a Hobby account rejects any cron more
+ * frequent than once a day. Nothing is missed by that:
+ * findAbandonedOrderIds selects orders between 1 and 48 hours old that
+ * have never been chased, so a daily pass still catches every one inside
+ * that window — a customer who abandons at 08:00 is emailed the next
+ * morning rather than an hour later. A worse reminder, not a lost one.
+ * Restore the hourly schedule on a Pro plan.
  */
 export async function POST(request: NextRequest) {
   const unauthorized = authorizeJob(request);

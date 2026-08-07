@@ -68,9 +68,31 @@ export function TurnstileWidget({
 
   return (
     <>
+      {/*
+        afterInteractive, not lazyOnload.
+
+        lazyOnload defers injection until the window `load` event — and this
+        component mounts during hydration, by which time `load` has already
+        fired. The listener waits for an event that will never come again,
+        `scriptReady` never flips, and the container sits there as an empty
+        div forever. Measured on /track before the change: readyState
+        "complete", container present, `window.turnstile` undefined —
+        while injecting the very same URL by hand resolved in under a
+        second, which is what ruled out CSP, the service worker and the
+        network.
+
+        The bug was invisible for as long as no site key was configured,
+        because without one the parent never renders this component at all.
+        It surfaced the hour Turnstile was switched on.
+
+        afterInteractive is also the better strategy on the merits: this is
+        a bot check standing in front of a checkout button, not an
+        analytics beacon. It should be ready when the visitor reaches the
+        button, not whenever the browser next happens to go idle.
+      */}
       <Script
         src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
-        strategy="lazyOnload"
+        strategy="afterInteractive"
         onReady={() => setScriptReady(true)}
       />
       <div ref={containerRef} className="mt-4" />

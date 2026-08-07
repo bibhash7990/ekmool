@@ -1,0 +1,224 @@
+# Render blueprint — https://render.com/docs/blueprint-spec
+#
+# One command deploys everything:
+#
+#   render blueprint launch
+#
+# or point Render at this repo once (New → Blueprint) and every push to
+# main redeploys automatically.
+#
+# WHAT THIS DOES NOT CREATE: the MySQL database. Render offers Postgres,
+# not MySQL, and this app is MySQL-only — 5,473 lines of MySQL SQL,
+# SELECT ... FOR UPDATE for the GST invoice series, and utf8mb4_0900_ai_ci
+# throughout. The database lives on Aiven; DATABASE_* below are marked
+# sync:false so Render prompts for them rather than inventing values.
+#
+# Redis IS created here, as a Render Key Value instance.
+
+services:
+  # ---- The storefront ----
+  - type: web
+    name: ekmool
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    # NOT the `runner` stage: that one expects its build to arrive on a
+    # shared compose volume, which Render has no equivalent for. It would
+    # start with an empty /app/dist and crash.
+    dockerTarget: standalone
+    region: singapore # closest Render region to India
+    plan: starter # free tier sleeps after 15 min — wrong for a shop
+    healthCheckPath: /api/health
+    autoDeploy: true
+
+    # NOTE: next build prerenders every product page from MySQL, so the
+    # DATABASE_* values below must be present as BUILD-time env, not only at
+    # run time. Render passes service env vars to the Docker build, so the
+    # same entries cover both.
+    envVars:
+      # --- Database (Aiven) — set these in the dashboard ---
+      - key: DATABASE_HOST
+        sync: false
+      - key: DATABASE_PORT
+        sync: false
+      - key: DATABASE_USER
+        sync: false
+      - key: DATABASE_PASSWORD
+        sync: false
+      - key: DATABASE_NAME
+        sync: false
+      - key: DATABASE_SSL
+        value: "true"
+      # Aiven signs with a per-project CA; without the PEM the handshake
+      # fails outright rather than falling back to plaintext.
+      - key: DATABASE_SSL_CA
+        sync: false
+
+      # --- Redis: wired automatically from the instance below ---
+      - key: REDIS_URL
+        fromService:
+          name: ekmool-redis
+          type: keyvalue
+          property: connectionString
+
+      # --- App ---
+      # Set to the service's own URL after the first deploy. A service
+      # cannot reference itself with fromService — Render rejects the
+      # blueprint as circular — and RENDER_EXTERNAL_URL does not exist at
+      # build time, which is when a NEXT_PUBLIC_ var is inlined.
+      #
+      # First deploy: leave blank, note the assigned onrender.com URL, set
+      # it here, redeploy. Baked into the client bundle, so a later change
+      # needs a rebuild rather than a restart.
+      - key: NEXT_PUBLIC_APP_URL
+        sync: false
+      # Regenerate these; do not reuse development values.
+      - key: CRON_SECRET
+        generateValue: true
+      - key: REVALIDATE_SECRET
+        generateValue: true
+      # Signs the customer session cookie. Unset, a per-process secret is
+      # generated and every restart signs every customer out.
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: ADMIN_EMAIL
+        sync: false
+
+      # --- Everything below is optional: each has a documented inert
+      #     state, and the site still takes COD orders with all of them
+      #     absent. See docs/keys-needed.md.
+      - key: NEXT_PUBLIC_TURNSTILE_SITE_KEY
+        sync: false
+      - key: TURNSTILE_SECRET_KEY
+        sync: false
+      - key: NEXT_PUBLIC_RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+      - key: RAZORPAY_WEBHOOK_SECRET
+        sync: false
+      - key: NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+        sync: false
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: SMTP_HOST
+        value: smtp-relay.brevo.com
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: MAIL_FROM
+        sync: false
+      - key: NEXT_PUBLIC_SENTRY_DSN
+        sync: false
+      - key: NEXT_PUBLIC_POSTHOG_KEY
+        sync: false
+
+      # --- Seller identity (GST). All four together or none: they decide
+      #     both whether GST is recorded and whether the invoice is a tax
+      #     invoice. s.32 CGST Act forbids an unregistered person from
+      #     collecting tax, so it is one switch, not four.
+      - key: SELLER_LEGAL_NAME
+        sync: false
+      - key: SELLER_GSTIN
+        sync: false
+      - key: SELLER_STATE
+        sync: false
+      - key: SELLER_ADDRESS
+        sync: false
+      - key: SELLER_FSSAI
+        sync: false
+
+      # --- Grievance officer: required by Rule 4(5) of the Consumer
+      #     Protection (E-Commerce) Rules 2020 before you trade.
+      - key: GRIEVANCE_OFFICER_NAME
+        sync: false
+      - key: GRIEVANCE_OFFICER_EMAIL
+        sync: false
+      - key: GRIEVANCE_OFFICER_PHONE
+        sync: false
+
+  # ---- The three scheduled jobs ----
+  #
+  # vercel.json declares the same three for Vercel. Run one platform or the
+  # other, never both, or customers get duplicate reminder emails.
+  #
+  # Times are UTC. IST is UTC+5:30, so 21:00 UTC = 02:30 IST.
+  - type: cron
+    name: ekmool-abandoned-payment-reminder
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerTarget: standalone
+    region: singapore
+    plan: starter
+    schedule: "0 * * * *"
+    dockerCommand: >-
+      node -e "fetch('https://'+process.env.APP_URL+'/api/jobs/abandoned-payment-reminder',{method:'POST',headers:{'x-cron-secret':process.env.CRON_SECRET}}).then(r=>{console.log(r.status);process.exit(r.ok?0:1)}).catch(e=>{console.error(e);process.exit(1)})"
+    envVars:
+      - key: APP_URL
+        fromService:
+          name: ekmool
+          type: web
+          property: host
+      - key: CRON_SECRET
+        fromService:
+          name: ekmool
+          type: web
+          envVarKey: CRON_SECRET
+
+  - type: cron
+    name: ekmool-low-stock-report
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerTarget: standalone
+    region: singapore
+    plan: starter
+    schedule: "30 2 * * *"
+    dockerCommand: >-
+      node -e "fetch('https://'+process.env.APP_URL+'/api/jobs/low-stock-report',{method:'POST',headers:{'x-cron-secret':process.env.CRON_SECRET}}).then(r=>{console.log(r.status);process.exit(r.ok?0:1)}).catch(e=>{console.error(e);process.exit(1)})"
+    envVars:
+      - key: APP_URL
+        fromService:
+          name: ekmool
+          type: web
+          property: host
+      - key: CRON_SECRET
+        fromService:
+          name: ekmool
+          type: web
+          envVarKey: CRON_SECRET
+
+  - type: cron
+    name: ekmool-cancel-stale-orders
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerTarget: standalone
+    region: singapore
+    plan: starter
+    schedule: "0 3 * * *"
+    dockerCommand: >-
+      node -e "fetch('https://'+process.env.APP_URL+'/api/jobs/cancel-stale-orders',{method:'POST',headers:{'x-cron-secret':process.env.CRON_SECRET}}).then(r=>{console.log(r.status);process.exit(r.ok?0:1)}).catch(e=>{console.error(e);process.exit(1)})"
+    envVars:
+      - key: APP_URL
+        fromService:
+          name: ekmool
+          type: web
+          property: host
+      - key: CRON_SECRET
+        fromService:
+          name: ekmool
+          type: web
+          envVarKey: CRON_SECRET
+
+  # ---- Redis: shared rate-limit buckets and cache purges ----
+  #
+  # Without it each instance keeps its own in-memory buckets, so N replicas
+  # turn a 10/min checkout limit into N×10, and an admin edit purges only
+  # the instance that served the form.
+  - type: keyvalue
+    name: ekmool-redis
+    region: singapore
+    plan: starter
+    maxmemoryPolicy: noeviction
+    ipAllowList: [] # reachable only from inside Render

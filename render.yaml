@@ -25,7 +25,14 @@ services:
     # shared compose volume, which Render has no equivalent for. It would
     # start with an empty /app/dist and crash.
     region: singapore # closest Render region to India
-    plan: starter # free tier sleeps after 15 min — wrong for a shop
+    # Free spins down after 15 minutes without inbound traffic and takes
+    # about a minute to wake, during which a visitor sees a loading page.
+    # Fine while testing; change to `starter` before you advertise the
+    # site, because a minute is long enough to lose a sale.
+    #
+    # Free also cannot receive private network traffic — see the cron
+    # section below, which is why the jobs address the public URL.
+    plan: free
     healthCheckPath: /api/health
     autoDeploy: true
 
@@ -138,74 +145,30 @@ services:
       - key: GRIEVANCE_OFFICER_PHONE
         sync: false
 
-  # ---- The three scheduled jobs ----
+  # ---- The three scheduled jobs: NOT declared here ----
   #
-  # vercel.json declares the same three for Vercel. Run one platform or the
-  # other, never both, or customers get duplicate reminder emails.
+  # Render cron jobs have no free tier — $1/month minimum each, so three of
+  # them cost more than the free web service saves. They are left out
+  # rather than silently added to your bill.
   #
-  # Times are UTC. IST is UTC+5:30, so 21:00 UTC = 02:30 IST.
-  - type: cron
-    name: ekmool-abandoned-payment-reminder
-    runtime: docker
-    dockerfilePath: ./Dockerfile
-    region: singapore
-    plan: starter
-    schedule: "0 * * * *"
-    dockerCommand: >-
-      node -e "fetch('http://'+process.env.APP_URL+'/api/jobs/abandoned-payment-reminder',{method:'POST',headers:{'x-cron-secret':process.env.CRON_SECRET}}).then(r=>{console.log(r.status);process.exit(r.ok?0:1)}).catch(e=>{console.error(e);process.exit(1)})"
-    envVars:
-      - key: APP_URL
-        fromService:
-          name: ekmool
-          type: web
-          property: hostport
-      - key: CRON_SECRET
-        fromService:
-          name: ekmool
-          type: web
-          envVarKey: CRON_SECRET
-
-  - type: cron
-    name: ekmool-low-stock-report
-    runtime: docker
-    dockerfilePath: ./Dockerfile
-    region: singapore
-    plan: starter
-    schedule: "30 2 * * *"
-    dockerCommand: >-
-      node -e "fetch('http://'+process.env.APP_URL+'/api/jobs/low-stock-report',{method:'POST',headers:{'x-cron-secret':process.env.CRON_SECRET}}).then(r=>{console.log(r.status);process.exit(r.ok?0:1)}).catch(e=>{console.error(e);process.exit(1)})"
-    envVars:
-      - key: APP_URL
-        fromService:
-          name: ekmool
-          type: web
-          property: hostport
-      - key: CRON_SECRET
-        fromService:
-          name: ekmool
-          type: web
-          envVarKey: CRON_SECRET
-
-  - type: cron
-    name: ekmool-cancel-stale-orders
-    runtime: docker
-    dockerfilePath: ./Dockerfile
-    region: singapore
-    plan: starter
-    schedule: "0 3 * * *"
-    dockerCommand: >-
-      node -e "fetch('http://'+process.env.APP_URL+'/api/jobs/cancel-stale-orders',{method:'POST',headers:{'x-cron-secret':process.env.CRON_SECRET}}).then(r=>{console.log(r.status);process.exit(r.ok?0:1)}).catch(e=>{console.error(e);process.exit(1)})"
-    envVars:
-      - key: APP_URL
-        fromService:
-          name: ekmool
-          type: web
-          property: hostport
-      - key: CRON_SECRET
-        fromService:
-          name: ekmool
-          type: web
-          envVarKey: CRON_SECRET
+  # They would also not work against a free web service even if paid for: a
+  # free instance cannot receive private network traffic, and `property:
+  # host` resolves to a private hostname.
+  #
+  # Two ways to run them meanwhile:
+  #
+  #   1. An external scheduler (cron-job.org, GitHub Actions) POSTing to
+  #      https://<your-app>.onrender.com/api/jobs/<name> with the header
+  #      x-cron-secret. Read CRON_SECRET from the Render dashboard — it is
+  #      generated there, so it is not in your .env.local.
+  #
+  #   2. `npm run cron` on any always-on machine; scripts/cron-runner.mts
+  #      drives the same three jobs on the same IST schedule.
+  #
+  # Uncomment nothing here until the web service is on a paid plan. What is
+  # missed while they are off: abandoned-payment reminders, the low-stock
+  # report, and automatic cancellation of stale unpaid orders — none of
+  # which breaks the shop, all of which are work someone does by hand.
 
   # ---- Redis: shared rate-limit buckets and cache purges ----
   #
@@ -215,9 +178,10 @@ services:
   - type: keyvalue
     name: ekmool-redis
     region: singapore
-    # plan is deliberately omitted: Key Value plans are a different set from
-    # web-service plans, and the spec does not document their identifiers.
-    # Render applies its default and you pick the size in the dashboard —
-    # better than guessing a name that invalidates the whole blueprint.
+    # Free Key Value has an ephemeral filesystem: everything is lost on
+    # restart. That is survivable here — rate-limit buckets and cache
+    # purge markers are both disposable, and losing them means one window
+    # of over-permissive limits, not corrupted data. No orders live here.
+    plan: free
     maxmemoryPolicy: noeviction
     ipAllowList: [] # reachable only from inside Render

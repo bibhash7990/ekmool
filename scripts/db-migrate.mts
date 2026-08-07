@@ -28,7 +28,16 @@ async function main(): Promise<void> {
     // plaintext, the local Docker container refuses TLS. Without this the
     // runner cannot migrate the database it is being deployed against.
     ...(/^(1|true|yes)$/i.test((process.env.DATABASE_SSL ?? "").trim())
-      ? { ssl: { minVersion: "TLSv1.2" as const } }
+      ? {
+          ssl: {
+            minVersion: "TLSv1.2" as const,
+            // Aiven and friends sign with their own CA; without the PEM the
+            // handshake is rejected rather than downgraded.
+            ...((process.env.DATABASE_SSL_CA ?? "").trim()
+              ? { ca: (process.env.DATABASE_SSL_CA ?? "").replace(/\\n/g, "\n") }
+              : {}),
+          },
+        }
       : {}),
   });
 

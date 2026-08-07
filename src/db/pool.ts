@@ -1,5 +1,5 @@
 import mysql from "mysql2/promise";
-import { dbSsl, getDbConfig } from "@/lib/env";
+import { dbSsl, dbSslCa, getDbConfig } from "@/lib/env";
 
 /**
  * Shared connection pool singleton. Cached on globalThis so dev HMR does
@@ -39,7 +39,18 @@ export function getPool(): mysql.Pool {
     // `minVersion` rather than `rejectUnauthorized: false` — disabling
     // verification would accept any certificate and hand a man in the
     // middle every order and address that crosses this pool.
-    ...(dbSsl ? { ssl: { minVersion: "TLSv1.2" as const } } : {}),
+    //
+    // DATABASE_SSL_CA carries the provider's CA when it signs with its own
+    // root. Aiven does, and without the PEM the handshake fails outright
+    // (HANDSHAKE_SSL_ERROR) rather than falling back to plaintext.
+    ...(dbSsl
+      ? {
+          ssl: {
+            minVersion: "TLSv1.2" as const,
+            ...(dbSslCa ? { ca: dbSslCa } : {}),
+          },
+        }
+      : {}),
     connectionLimit: 20,
     queueLimit: 100,
     waitForConnections: true,

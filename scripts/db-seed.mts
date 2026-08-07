@@ -21,7 +21,14 @@ async function main(): Promise<void> {
     database: process.env.DATABASE_NAME ?? "ekmool",
     // See db-migrate.mts — seeding a managed database needs TLS too.
     ...(/^(1|true|yes)$/i.test((process.env.DATABASE_SSL ?? "").trim())
-      ? { ssl: { minVersion: "TLSv1.2" as const } }
+      ? {
+          ssl: {
+            minVersion: "TLSv1.2" as const,
+            ...((process.env.DATABASE_SSL_CA ?? "").trim()
+              ? { ca: (process.env.DATABASE_SSL_CA ?? "").replace(/\\n/g, "\n") }
+              : {}),
+          },
+        }
       : {}),
   });
 

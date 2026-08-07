@@ -30,17 +30,10 @@ services:
     healthCheckPath: /api/health
     autoDeploy: true
 
-    # next build prerenders every product page from MySQL, so the database
-    # credentials must be present at BUILD time, not only at run time.
-    buildFilter:
-      paths:
-        - src/**
-        - public/**
-        - package.json
-        - package-lock.json
-        - Dockerfile
-        - next.config.ts
-
+    # NOTE: next build prerenders every product page from MySQL, so the
+    # DATABASE_* values below must be present as BUILD-time env, not only at
+    # run time. Render passes service env vars to the Docker build, so the
+    # same entries cover both.
     envVars:
       # --- Database (Aiven) — set these in the dashboard ---
       - key: DATABASE_HOST
@@ -68,11 +61,16 @@ services:
           property: connectionString
 
       # --- App ---
+      # Set to the service's own URL after the first deploy. A service
+      # cannot reference itself with fromService — Render rejects the
+      # blueprint as circular — and RENDER_EXTERNAL_URL does not exist at
+      # build time, which is when a NEXT_PUBLIC_ var is inlined.
+      #
+      # First deploy: leave blank, note the assigned onrender.com URL, set
+      # it here, redeploy. Baked into the client bundle, so a later change
+      # needs a rebuild rather than a restart.
       - key: NEXT_PUBLIC_APP_URL
-        fromService:
-          name: ekmool
-          type: web
-          property: host
+        sync: false
       # Regenerate these; do not reuse development values.
       - key: CRON_SECRET
         generateValue: true
@@ -156,7 +154,7 @@ services:
     plan: starter
     schedule: "0 * * * *"
     dockerCommand: >-
-      node -e "fetch(process.env.APP_URL+'/api/jobs/abandoned-payment-reminder',{method:'POST',headers:{'x-cron-secret':process.env.CRON_SECRET}}).then(r=>{console.log(r.status);process.exit(r.ok?0:1)}).catch(e=>{console.error(e);process.exit(1)})"
+      node -e "fetch('https://'+process.env.APP_URL+'/api/jobs/abandoned-payment-reminder',{method:'POST',headers:{'x-cron-secret':process.env.CRON_SECRET}}).then(r=>{console.log(r.status);process.exit(r.ok?0:1)}).catch(e=>{console.error(e);process.exit(1)})"
     envVars:
       - key: APP_URL
         fromService:
@@ -178,7 +176,7 @@ services:
     plan: starter
     schedule: "30 2 * * *"
     dockerCommand: >-
-      node -e "fetch(process.env.APP_URL+'/api/jobs/low-stock-report',{method:'POST',headers:{'x-cron-secret':process.env.CRON_SECRET}}).then(r=>{console.log(r.status);process.exit(r.ok?0:1)}).catch(e=>{console.error(e);process.exit(1)})"
+      node -e "fetch('https://'+process.env.APP_URL+'/api/jobs/low-stock-report',{method:'POST',headers:{'x-cron-secret':process.env.CRON_SECRET}}).then(r=>{console.log(r.status);process.exit(r.ok?0:1)}).catch(e=>{console.error(e);process.exit(1)})"
     envVars:
       - key: APP_URL
         fromService:
@@ -200,7 +198,7 @@ services:
     plan: starter
     schedule: "0 3 * * *"
     dockerCommand: >-
-      node -e "fetch(process.env.APP_URL+'/api/jobs/cancel-stale-orders',{method:'POST',headers:{'x-cron-secret':process.env.CRON_SECRET}}).then(r=>{console.log(r.status);process.exit(r.ok?0:1)}).catch(e=>{console.error(e);process.exit(1)})"
+      node -e "fetch('https://'+process.env.APP_URL+'/api/jobs/cancel-stale-orders',{method:'POST',headers:{'x-cron-secret':process.env.CRON_SECRET}}).then(r=>{console.log(r.status);process.exit(r.ok?0:1)}).catch(e=>{console.error(e);process.exit(1)})"
     envVars:
       - key: APP_URL
         fromService:

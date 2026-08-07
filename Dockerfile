@@ -74,3 +74,76 @@ HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=5 \
   CMD node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 CMD ["node", "server.js"]
+
+####################  standalone  ######################
+# Self-contained image: builds during `docker build` and carries its own
+# output. This is what Render (and any other single-image PaaS) needs,
+# because there is no shared volume for a separate builder service to
+# write into — `runner` above would start with an empty /app/dist.
+#
+# The constraint in the header still applies: `next build` prerenders every
+# product page from MySQL, so this stage needs DATABASE_* at BUILD time, not
+# just at run time. On Render that works because the managed database exists
+# before the first deploy. The values arrive as build args and are promoted
+# to env for the build step only — they are not persisted into the final
+# layer, so the image itself carries no credentials.
+#
+# Compose is unaffected: it targets `runner`, which is untouched.
+FROM base AS standalone-builder
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+
+ARG DATABASE_HOST
+ARG DATABASE_PORT
+ARG DATABASE_USER
+ARG DATABASE_PASSWORD
+ARG DATABASE_NAME
+ARG DATABASE_SSL
+ARG DATABASE_SSL_CA
+ARG NEXT_PUBLIC_APP_URL
+ARG NEXT_PUBLIC_TURNSTILE_SITE_KEY
+ARG NEXT_PUBLIC_RAZORPAY_KEY_ID
+ARG NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+ARG NEXT_PUBLIC_SENTRY_DSN
+ARG NEXT_PUBLIC_POSTHOG_KEY
+
+ENV DATABASE_HOST=$DATABASE_HOST \
+    DATABASE_PORT=$DATABASE_PORT \
+    DATABASE_USER=$DATABASE_USER \
+    DATABASE_PASSWORD=$DATABASE_PASSWORD \
+    DATABASE_NAME=$DATABASE_NAME \
+    DATABASE_SSL=$DATABASE_SSL \
+    DATABASE_SSL_CA=$DATABASE_SSL_CA \
+    NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL \
+    NEXT_PUBLIC_TURNSTILE_SITE_KEY=$NEXT_PUBLIC_TURNSTILE_SITE_KEY \
+    NEXT_PUBLIC_RAZORPAY_KEY_ID=$NEXT_PUBLIC_RAZORPAY_KEY_ID \
+    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY \
+    NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN \
+    NEXT_PUBLIC_POSTHOG_KEY=$NEXT_PUBLIC_POSTHOG_KEY
+
+RUN npm run build
+
+####################  standalone  ######################
+FROM base AS standalone
+
+ENV NODE_ENV=production \
+    PORT=3000 \
+    HOSTNAME=0.0.0.0
+
+RUN addgroup -g 1001 -S nodejs \
+ && adduser -S nextjs -u 1001 -G nodejs
+
+# `output: "standalone"` emits a tree that already contains the minimal
+# node_modules it needs, so nothing is installed here.
+COPY --from=standalone-builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=standalone-builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=standalone-builder --chown=nextjs:nodejs /app/public ./public
+
+USER nextjs
+EXPOSE 3000
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=5 \
+  CMD node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+
+CMD ["node", "server.js"]

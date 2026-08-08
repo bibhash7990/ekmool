@@ -22,7 +22,30 @@ export function getPool(): mysql.Pool {
   if (globalThis.__ekmoolPool) return globalThis.__ekmoolPool;
 
   const config = getDbConfig();
-  if (!config) throw new DbUnconfiguredError();
+  if (!config) {
+    // Name the missing variables. During `next build` this throw kills the
+    // render worker, and a worker that dies takes its stack with it — on a
+    // hosted build the log then stops after the Turbopack banner with no
+    // error at all, which is indistinguishable from a crash. Printing the
+    // names first means the log says which variable is absent even when
+    // nothing else survives.
+    const missing = (
+      [
+        ["DATABASE_HOST", process.env.DATABASE_HOST],
+        ["DATABASE_PORT", process.env.DATABASE_PORT],
+        ["DATABASE_USER", process.env.DATABASE_USER],
+        ["DATABASE_PASSWORD", process.env.DATABASE_PASSWORD],
+        ["DATABASE_NAME", process.env.DATABASE_NAME],
+      ] as const
+    )
+      .filter(([, v]) => !(v ?? "").trim())
+      .map(([k]) => k);
+
+    console.error(
+      `[db] not configured — missing: ${missing.join(", ") || "(all present but invalid)"}`,
+    );
+    throw new DbUnconfiguredError();
+  }
 
   const pool = mysql.createPool({
     host: config.host,

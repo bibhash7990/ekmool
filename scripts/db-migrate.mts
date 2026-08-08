@@ -9,7 +9,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import mysql from "mysql2/promise";
-import { loadEnv } from "./load-env.mts";
+import { loadEnv, readCa } from "./load-env.mts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const MIGRATIONS_DIR = join(here, "..", "src", "db", "migrations");
@@ -33,9 +33,7 @@ async function main(): Promise<void> {
             minVersion: "TLSv1.2" as const,
             // Aiven and friends sign with their own CA; without the PEM the
             // handshake is rejected rather than downgraded.
-            ...((process.env.DATABASE_SSL_CA ?? "").trim()
-              ? { ca: (process.env.DATABASE_SSL_CA ?? "").replace(/\\n/g, "\n") }
-              : {}),
+            ...(readCa() ? { ca: readCa() } : {}),
           },
         }
       : {}),

@@ -32,3 +32,23 @@ export function loadEnv(): void {
   parseInto(join(root, ".env.local"));
   parseInto(join(root, ".env"));
 }
+
+/**
+ * The database provider's CA: `ca.pem` at the repository root if present,
+ * otherwise DATABASE_SSL_CA with escaped newlines restored.
+ *
+ * Same precedence as `dbSslCa` in src/lib/env.ts, and duplicated here
+ * rather than imported because that module is `server-only` and these
+ * scripts run outside Next entirely.
+ *
+ * The file is preferred because a PEM survives a file and does not survive
+ * a dashboard: Vercel's env editor strips the newlines out of a pasted
+ * certificate, and OpenSSL rejects the result.
+ */
+export function readCa(): string {
+  try {
+    return readFileSync(join(root, "ca.pem"), "utf8").trim();
+  } catch {
+    return (process.env.DATABASE_SSL_CA ?? "").replace(/\\n/g, "\n");
+  }
+}

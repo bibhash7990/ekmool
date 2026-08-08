@@ -14,6 +14,13 @@ next-env.d.ts
 # misc
 .DS_Store
 *.pem
+# ...except the database provider's CA certificate. A CA cert is public by
+# design — it is what verifies the server, and it carries no secret — and
+# committing it is what lets a hosted build read it from disk instead of an
+# env var. Vercel's dashboard strips the newlines out of a pasted PEM,
+# which OpenSSL then rejects. The blanket *.pem rule stays for private
+# keys, which must never be committed.
+!ca.pem
 
 # debug
 npm-debug.log*

@@ -8,6 +8,9 @@
  * Do not import this module from client components; client code may only
  * read `NEXT_PUBLIC_*` vars directly so they are inlined at build time.
  */
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { z } from "zod";
 
 function str(v: string | undefined): string {
@@ -63,10 +66,68 @@ export const dbSsl: boolean = /^(1|true|yes)$/i.test(
  * Escaped newlines are unescaped so the PEM survives a single-line env var,
  * which is the only shape Vercel's dashboard accepts.
  */
-export const dbSslCa: string = str(process.env.DATABASE_SSL_CA).replace(
-  /\\n/g,
-  "\n",
-);
+/**
+ * The provider's CA, from `ca.pem` at the repository root if it is there,
+ * otherwise from DATABASE_SSL_CA.
+ *
+ * The file wins because a PEM survives a file intact and does not survive
+ * a dashboard. Vercel's env editor strips the newlines out of a pasted
+ * certificate, leaving the header welded to the base64 body; OpenSSL
+ * rejects it, and during `next build` the failure kills the render worker
+ * before any message reaches the log. Three builds failed that way with a
+ * log that simply stopped after the Turbopack banner.
+ *
+ * Committing it is safe: a CA certificate is public by design — it is what
+ * verifies the server, and it carries no secret. The password and host
+ * stay in the environment.
+ *
+ * readFileSync at module scope is deliberate. This module is imported once
+ * per process, the file is 1.5 KB, and the alternative is threading an
+ * async read through every caller of getPool for no gain.
+ */
+function readCaFile(): string {
+  try {
+    return readFileSync(join(process.cwd(), "ca.pem"), "utf8").trim();
+  } catch {
+    return "";
+  }
+}
+
+export const dbSslCa: string =
+  readCaFile() || normalisePem(str(process.env.DATABASE_SSL_CA));
+
+/**
+ * Put a PEM back into the shape OpenSSL will parse, whatever the host's
+ * env editor did to it.
+ *
+ * Three shapes reach us. Escaped `\n` from a .env file, which is what the
+ * template documents. Real newlines, from a host that preserves them. And
+ * — the one that cost three silent build failures — no separators at all,
+ * because Vercel's dashboard strips them, leaving the header welded to the
+ * base64 body: `-----BEGIN CERTIFICATE-----MIIERDCC...`. OpenSSL rejects
+ * that outright, mysql2 reports it as HANDSHAKE_SSL_ERROR, and during
+ * `next build` the throw kills the render worker before the message can
+ * reach the log.
+ *
+ * Rebuilding it is unambiguous: a PEM body is base64, so it carries no
+ * spaces or newlines of its own, and re-wrapping at 64 characters is the
+ * format's own convention rather than a guess.
+ */
+function normalisePem(raw: string): string {
+  if (!raw) return "";
+
+  const unescaped = raw.replace(/\\n/g, "\n");
+  if (unescaped.includes("\n")) return unescaped;
+
+  const match = unescaped.match(
+    /^-----BEGIN ([A-Z ]+)-----(.*?)-----END \1-----$/,
+  );
+  if (!match) return unescaped;
+
+  const [, label, body] = match;
+  const wrapped = body.replace(/\s+/g, "").match(/.{1,64}/g) ?? [];
+  return `-----BEGIN ${label}-----\n${wrapped.join("\n")}\n-----END ${label}-----\n`;
+}
 
 export function getDbConfig(): DbConfig | null {
   const parsed = dbSchema.safeParse({

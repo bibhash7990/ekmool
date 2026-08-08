@@ -7,7 +7,7 @@
  * Run with: npm run db:seed
  */
 import mysql from "mysql2/promise";
-import { loadEnv } from "./load-env.mts";
+import { loadEnv, readCa } from "./load-env.mts";
 import { SEED_PRODUCTS } from "../src/db/seed/products.seed.ts";
 
 async function main(): Promise<void> {
@@ -24,9 +24,7 @@ async function main(): Promise<void> {
       ? {
           ssl: {
             minVersion: "TLSv1.2" as const,
-            ...((process.env.DATABASE_SSL_CA ?? "").trim()
-              ? { ca: (process.env.DATABASE_SSL_CA ?? "").replace(/\\n/g, "\n") }
-              : {}),
+            ...(readCa() ? { ca: readCa() } : {}),
           },
         }
       : {}),

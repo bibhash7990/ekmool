@@ -130,7 +130,13 @@ const withMDX = createMDX({
 export default withSentryConfig(withMDX(nextConfig), {
   // Source-map upload is skipped without an auth token; the build still
   // succeeds, so a fresh clone with no Sentry account works unchanged.
-  silent: true,
+  //
+  // Not silent in CI. `silent: true` swallows Sentry's own build output,
+  // and on a hosted build that is the difference between a diagnosable
+  // failure and a log that simply stops after the Turbopack banner with
+  // no error at all. Locally it stays quiet, because there the build
+  // works and the noise is not worth it.
+  silent: !process.env.CI,
   widenClientFileUpload: false,
   // No `disableLogger` here: it is deprecated in favour of
   // webpack.treeshake.removeDebugLogging, which Turbopack does not support.

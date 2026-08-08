@@ -36,9 +36,36 @@ const CANDIDATES = ["", ".ts", ".tsx", ".mts", "/index.ts", "/index.tsx"];
  * the tag a query registers under is exactly the sort of thing worth
  * getting wrong loudly.
  */
-const NEXT_SUBPATHS = new Map([["next/cache", "next/cache.js"]]);
+const NEXT_SUBPATHS = new Map([
+  ["next/cache", "next/cache.js"],
+  // Same reason, for src/lib/markdown.ts: the prose renderer emits a real
+  // <Link> for internal hrefs, and the test that proves a javascript: URL
+  // never becomes an href has to import the actual renderer to prove
+  // anything about it.
+  ["next/link", "next/link.js"],
+]);
+
+/**
+ * `server-only` resolves to a module whose whole job is to throw outside a
+ * server component. The `react-server` condition normally neutralises it,
+ * but that condition also makes React refuse to load react-dom/server —
+ * so a test that has to RENDER something (scripts/test-markdown.mjs) can
+ * have one or the other, not both.
+ *
+ * Pointing the specifier at the package's own empty build is what the
+ * condition would have done anyway, and leaves react-dom/server working.
+ * Scripts that do not render keep using --conditions react-server.
+ */
+const SERVER_ONLY_STUB = new URL(
+  "../node_modules/server-only/empty.js",
+  import.meta.url,
+);
 
 export async function resolve(specifier, context, next) {
+  if (specifier === "server-only" && existsSync(fileURLToPath(SERVER_ONLY_STUB))) {
+    return next(SERVER_ONLY_STUB.href, context);
+  }
+
   const mapped = NEXT_SUBPATHS.get(specifier);
   if (mapped) return next(mapped, context);
 

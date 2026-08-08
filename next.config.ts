@@ -93,7 +93,20 @@ const SECURITY_HEADERS = [
 ];
 
 const nextConfig: NextConfig = {
-  output: "standalone",
+  /**
+   * Standalone everywhere except Vercel.
+   *
+   * The Dockerfile serves `.next/standalone`, so this is required for the
+   * container and for `npm run standalone`. Vercel is the exception: it
+   * runs its own file-tracing step after the build (`onBuildComplete`)
+   * which reads `.next/next-server.js.nft.json` — a file standalone mode
+   * does not emit. The build then fails at the very last step with ENOENT,
+   * after all 36 pages have already been generated.
+   *
+   * VERCEL is set by the platform on its build machines, so this needs no
+   * configuration at either end.
+   */
+  ...(process.env.VERCEL ? {} : { output: "standalone" as const }),
   // Required by the PostHog reverse proxy (API paths must keep their shape).
   skipTrailingSlashRedirect: true,
   pageExtensions: ["ts", "tsx", "mdx"],

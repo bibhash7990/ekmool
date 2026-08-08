@@ -1,5 +1,6 @@
 import { revalidateTag, revalidatePath } from "next/cache";
 import { PRODUCTS_TAG } from "@/db/queries/products";
+import { CONTENT_TAG } from "@/db/queries/content";
 import { REVIEWS_TAG } from "@/db/queries/reviews";
 import {
   PURGE_CHANNEL,
@@ -59,6 +60,23 @@ export function revalidateCatalog(options?: PurgeOptions): void {
 export function revalidateReviews(options?: PurgeOptions): void {
   revalidateTag(REVIEWS_TAG, "max");
   broadcast("reviews", options);
+}
+
+/**
+ * Editorial copy changed in /admin/content.
+ *
+ * Its own tag and its own function, for the reason above: an edit to a
+ * paragraph on /about must not purge the catalogue and send every product
+ * page back to the database.
+ *
+ * No revalidatePath for the product routes here either — same rule, same
+ * reason. The static routes are purged by path because copy appears on
+ * them and regeneration there needs no path parameters.
+ */
+export function revalidateContent(options?: PurgeOptions): void {
+  revalidateTag(CONTENT_TAG, "max");
+  revalidatePath("/");
+  broadcast("content", options);
 }
 
 /* ------------------------------------------------------------------ */

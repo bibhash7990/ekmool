@@ -1,5 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { revalidateCatalog, revalidateReviews } from "@/lib/revalidate";
+import {
+  revalidateCatalog,
+  revalidateContent,
+  revalidateReviews,
+} from "@/lib/revalidate";
 import { revalidateSecret } from "@/lib/env";
 import { timingSafeEquals } from "@/lib/crypto";
 
@@ -45,6 +49,10 @@ export async function POST(request: NextRequest) {
   if (!fanout || kind === "reviews") {
     revalidateReviews(options);
     tags.push("reviews");
+  }
+  if (!fanout || kind === "content") {
+    revalidateContent(options);
+    tags.push("site-content");
   }
 
   return NextResponse.json({

@@ -9,7 +9,7 @@
 
 export const PURGE_CHANNEL = "ekmool:purge";
 
-export type PurgeKind = "catalog" | "reviews";
+export type PurgeKind = "catalog" | "reviews" | "content";
 
 export interface PurgeMessage {
   kind: PurgeKind;

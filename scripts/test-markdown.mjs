@@ -97,6 +97,29 @@ console.log("\n2. Legitimate formatting survives");
   const out = html("- Damaged items — refund within **48 hours**.");
   check("bold inside a list item survives", out.includes("<strong>48 hours</strong>"), out);
 }
+{
+  // mdast wraps every list item's content in a paragraph, including for a
+  // tight list. Rendering that literally gives <li><p>one</p></li>, which
+  // is not the markup these pages had before the migration — it was
+  // caught by the structural half of the parity check and by nothing else.
+  const out = html("- one\n- two");
+  check("a tight list item has no inner paragraph", !out.includes("<li><p>"), out);
+  check("its words are still there", out.includes("<li>one</li>"), out);
+}
+{
+  // The opposite case: a genuinely loose list, where the author put blank
+  // lines between items, keeps its paragraphs and the spacing they carry.
+  const out = html("- one\n\n- two");
+  check("a loose list item keeps its paragraph", out.includes("<li><p>"), out);
+}
+{
+  const out = html("- first para\n\n  second para of the same item");
+  check(
+    "an item with two paragraphs keeps both",
+    (out.match(/<p>/g) || []).length === 2,
+    out,
+  );
+}
 
 console.log("\n3. The design system cannot be escaped");
 {

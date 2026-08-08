@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { PolicyPage, PolicySection } from "@/components/legal/PolicyPage";
+import { getContent, t } from "@/lib/content";
+import { renderMarkdown } from "@/lib/markdown";
 import { DELIVERY_ZONES, DISPATCH_DAYS } from "@/lib/serviceability";
 
 export const metadata: Metadata = {
@@ -10,49 +11,52 @@ export const metadata: Metadata = {
   alternates: { canonical: "/shipping-policy" },
 };
 
-export default function ShippingPolicy() {
+/**
+ * The plain sections, in order. "times" is not here because it wraps the
+ * delivery-zone table and is rendered separately below.
+ */
+const BEFORE_TIMES = ["where", "charges"] as const;
+const AFTER_TIMES = [
+  "tracking",
+  "packaging",
+  "failed",
+  "damage",
+  "questions",
+] as const;
+
+export default async function ShippingPolicy() {
+  const content = await getContent();
+
   return (
     <PolicyPage
       href="/shipping-policy"
       label="Shipping Policy"
       title="Shipping Policy"
-      standfirst="Where we ship, what it costs, how long it takes, and what happens when something goes wrong in transit."
-      updated="4 August 2026"
+      standfirst={t(content, "policy.shipping.standfirst")}
+      updated={t(content, "policy.shipping.updated")}
     >
-      <PolicySection heading="Where we ship">
-        <p>
-          We ship to all serviceable PIN codes across India. We do not
-          currently ship internationally. If our courier partners cannot reach
-          your PIN code we will contact you and refund the order in full rather
-          than leave it pending.
-        </p>
-      </PolicySection>
+      {BEFORE_TIMES.map((section) => (
+        <PolicySection
+          key={section}
+          heading={t(content, `policy.shipping.${section}.heading`)}
+        >
+          {renderMarkdown(t(content, `policy.shipping.${section}.body`))}
+        </PolicySection>
+      ))}
 
-      <PolicySection heading="Charges">
-        <ul>
-          <li>Orders of ₹499 and above — free shipping.</li>
-          <li>
-            Orders below ₹499 — flat ₹49, anywhere in India, regardless of
-            distance.
-          </li>
-          <li>
-            Cash on Delivery carries no extra fee. All prices shown on the site
-            already include GST.
-          </li>
-        </ul>
-      </PolicySection>
+      <PolicySection heading={t(content, "policy.shipping.times.heading")}>
+        {renderMarkdown(t(content, "policy.shipping.times.before"))}
 
-      <PolicySection heading="Dispatch and delivery times">
-        <p>
-          Orders are packed and handed to the courier within one working day of
-          confirmation. Orders placed on Sunday or a public holiday are packed
-          the next working day.
-        </p>
-        <p>Typical transit time after dispatch:</p>
-        {/* Rendered from lib/serviceability.ts, which is the same table the
-            PIN code checker on a product page reads. A policy and a widget
-            quoting different numbers is how a shop ends up with a promise
-            it did not know it had made. */}
+        {/*
+          NOT editable, deliberately, and the one section split into a
+          before and an after so it can stay that way.
+
+          The zones render from lib/serviceability.ts, which is the same
+          table the PIN code checker on a product page reads. A policy and
+          a widget quoting different numbers is how a shop ends up with a
+          promise it did not know it had made — so this cannot be a
+          content key, no matter how convenient that would be.
+        */}
         <ul>
           {Object.values(DELIVERY_ZONES).map((zone) => (
             <li key={zone.id}>
@@ -65,66 +69,18 @@ export default function ShippingPolicy() {
           working day for packing and gives you the total, so the figure it
           shows is from the moment you order rather than from dispatch.
         </p>
-        <p>
-          These are courier estimates, not guarantees. Weather, festival
-          season, strikes and regional restrictions can extend them, and we
-          will tell you if we know a delay is coming. Where a PIN code range
-          covers both plains and hills we quote the slower band, so an
-          estimate is more likely to be beaten than missed.
-        </p>
+
+        {renderMarkdown(t(content, "policy.shipping.times.after"))}
       </PolicySection>
 
-      <PolicySection heading="Tracking">
-        <p>
-          You receive a tracking link by email the moment your parcel is handed
-          over. That link is more current than we are, because it reads the
-          courier&apos;s own system directly. If tracking has not moved for more
-          than three working days, write to us and we will open a query with
-          the courier.
-        </p>
-      </PolicySection>
-
-      <PolicySection heading="Packaging">
-        <p>
-          Spices are packed in sealed, food-grade pouches inside a rigid outer
-          carton, with the batch and packing date printed on the pouch. We use
-          paper tape and paper-based void fill rather than plastic wherever the
-          parcel weight allows it.
-        </p>
-      </PolicySection>
-
-      <PolicySection heading="Failed and undelivered parcels">
-        <p>
-          Couriers usually attempt delivery up to three times. Please make sure
-          the phone number on your order is one you will answer, as most failed
-          deliveries in India are failed phone calls rather than failed
-          addresses.
-        </p>
-        <p>
-          If a parcel returns to us undelivered we will contact you to arrange
-          a re-dispatch. For prepaid orders you may instead request a refund of
-          the order value; the original shipping charge is not refunded on a
-          second attempt caused by an incorrect address or an unreachable
-          number.
-        </p>
-      </PolicySection>
-
-      <PolicySection heading="Damage in transit">
-        <p>
-          If your parcel arrives damaged, or a pouch has burst, tell us within
-          48 hours of delivery with a photograph and we will replace or refund
-          it in full. You will not be asked to ship it back. See the{" "}
-          <Link href="/refund-policy">refund policy</Link> for how and when the
-          money reaches you.
-        </p>
-      </PolicySection>
-
-      <PolicySection heading="Questions">
-        <p>
-          Anything not covered here — write to us from the{" "}
-          <Link href="/contact">contact page</Link> with your order reference.
-        </p>
-      </PolicySection>
+      {AFTER_TIMES.map((section) => (
+        <PolicySection
+          key={section}
+          heading={t(content, `policy.shipping.${section}.heading`)}
+        >
+          {renderMarkdown(t(content, `policy.shipping.${section}.body`))}
+        </PolicySection>
+      ))}
     </PolicyPage>
   );
 }

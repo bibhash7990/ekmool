@@ -147,7 +147,12 @@ function renderPhrasing(
   });
 }
 
-function renderBlock(nodes: RootContent[], keyPrefix: string): ReactNode[] {
+function renderBlock(
+  nodes: RootContent[],
+  keyPrefix: string,
+  /** True when the enclosing list is loose — see the listItem case. */
+  looseList = false,
+): ReactNode[] {
   return nodes.map((node, index) => {
     const key = `${keyPrefix}-${index}`;
 
@@ -172,11 +177,43 @@ function renderBlock(nodes: RootContent[], keyPrefix: string): ReactNode[] {
         return createElement(
           node.ordered ? "ol" : "ul",
           { key },
-          ...renderBlock(node.children, key),
+          // `spread` is on the LIST, not the item: it is what markdown
+          // calls a loose list, written with blank lines between the
+          // items, and CommonMark renders those items wrapped in <p>.
+          // Passing it down is what lets a list item know which it is.
+          ...renderBlock(node.children, key, node.spread === true),
         );
 
-      case "listItem":
+      case "listItem": {
+        // mdast ALWAYS wraps list-item content in a paragraph, even for a
+        // tight list written `- one` / `- two`. Rendering that literally
+        // gives <li><p>one</p></li>, which is not the markup these pages
+        // had before the migration — measured: 16 extra tags on the refund
+        // policy, invisible to a text comparison and caught only by the
+        // structural half of the parity check.
+        //
+        // CommonMark's rule is that a TIGHT list drops the paragraphs and
+        // a LOOSE one keeps them. `looseList` comes from the parent, and
+        // an item holding more than one block always keeps its structure.
+        // Narrowed on the node itself rather than through a boolean, so
+        // the compiler can see that `only` really is a paragraph.
+        const only = node.children.length === 1 ? node.children[0] : null;
+
+        if (
+          !looseList &&
+          node.spread !== true &&
+          only !== null &&
+          only.type === "paragraph"
+        ) {
+          return createElement(
+            "li",
+            { key },
+            ...renderPhrasing(only.children, key),
+          );
+        }
+
         return createElement("li", { key }, ...renderBlock(node.children, key));
+      }
 
       default:
         return null;

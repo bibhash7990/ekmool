@@ -8,6 +8,7 @@ import {
   CONTENT_DEFAULTS,
   CONTENT_GROUPS,
   CONTENT_LABELS,
+  isMarkdownKey,
   keysInGroup,
   maxLengthFor,
 } from "@/content/defaults";
@@ -96,6 +97,7 @@ export default async function AdminContentPage() {
                     current={override?.value ?? CONTENT_DEFAULTS[key]}
                     overridden={Boolean(override)}
                     maxLength={maxLengthFor(key)}
+                    markdown={isMarkdownKey(key)}
                     updatedAt={
                       override ? DATE.format(override.updatedAt) : null
                     }

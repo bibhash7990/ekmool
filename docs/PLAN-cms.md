@@ -151,9 +151,19 @@ the build that the design above did not settle:
   would destroy it at the moment it is needed.
 
 **3 · Migrate the pages** — replace hardcoded strings with `t()` calls, one
-page group at a time: policies first (highest value, lowest risk), then
-FAQ, About, Home, then the component-level prose. Each page group is its
-own commit so a regression is easy to isolate.
+page group at a time. Each page group is its own commit so a regression is
+easy to isolate.
+
+Order changed during the work. The plan said policies first, "highest
+value, lowest risk"; the second half was wrong. Policies are structured
+documents — 35 sections, 49 paragraphs, 27 list items, 8 links and 9 bold
+runs — so they were the group that needed a rendering decision, not the
+one that needed none. Home, track, nav and footer went first because they
+were plain strings, then the markdown renderer, then the policies.
+
+Done: home, track, nav, footer (28 keys) · all four policy pages (79
+keys, 38 of them markdown). Remaining: FAQ, About, contact, and the
+component-level prose.
 
 **4 · Guardrails** — the rule below, plus a script that fails CI when a
 `t()` key has no default and when a default has no `t()` caller.

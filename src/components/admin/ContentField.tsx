@@ -30,6 +30,8 @@ export interface ContentFieldProps {
   overridden: boolean;
   maxLength: number;
   updatedAt: string | null;
+  /** Prose: gets a tall box and the formatting note. */
+  markdown?: boolean;
 }
 
 /** Over about a line and a half, a single-line input stops being usable. */
@@ -44,6 +46,7 @@ export function ContentField({
   overridden,
   maxLength,
   updatedAt,
+  markdown = false,
 }: ContentFieldProps) {
   const [state, action, pending] = useActionState<ActionResult | null, FormData>(
     saveContentAction,
@@ -53,7 +56,7 @@ export function ContentField({
   const fieldId = useId();
   const hintId = `${fieldId}-hint`;
 
-  const multiline = maxLength > MULTILINE_ABOVE;
+  const multiline = markdown || maxLength > MULTILINE_ABOVE;
   const dirty = value !== current;
   const isDefault = value === fallback;
 
@@ -98,11 +101,26 @@ export function ContentField({
 
       <div className="mt-2">
         {multiline ? (
-          <textarea {...shared} rows={value.length > 300 ? 6 : 3} />
+          <textarea
+            {...shared}
+            // Prose needs room to see a whole section at once; editing a
+            // policy through a three-line slot is how a paragraph gets
+            // duplicated without anyone noticing.
+            rows={markdown ? Math.min(20, 6 + Math.floor(value.length / 180)) : 3}
+            className={`${shared.className} ${markdown ? "font-mono text-[13px] leading-relaxed" : ""}`}
+          />
         ) : (
           <input {...shared} type="text" />
         )}
       </div>
+
+      {markdown && (
+        <p className="mt-1.5 text-15 text-ek-green-700">
+          Blank line between paragraphs. <code>- item</code> for a bullet,{" "}
+          <code>**bold**</code>, <code>[words](/page)</code> for a link.
+          Anything else is shown as plain text.
+        </p>
+      )}
 
       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
         <button

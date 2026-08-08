@@ -45,7 +45,7 @@ export function Footer() {
                 <li key={slug}>
                   <Link
                     href={`/products/${slug}`}
-                    className="link-draw text-15 text-ek-cream/90 hover:text-ek-gold-500"
+                    className="link-draw inline-flex min-h-11 items-center text-15 text-ek-cream/90 hover:text-ek-gold-500"
                   >
                     {PRODUCT_NAMES[slug]}
                   </Link>
@@ -61,7 +61,7 @@ export function Footer() {
                 <li key={link.href}>
                   <Link
                     href={link.href}
-                    className="link-draw text-15 text-ek-cream/90 hover:text-ek-gold-500"
+                    className="link-draw inline-flex min-h-11 items-center text-15 text-ek-cream/90 hover:text-ek-gold-500"
                   >
                     {link.label}
                   </Link>
@@ -76,7 +76,7 @@ export function Footer() {
               <li>
                 <Link
                   href="/account"
-                  className="link-draw text-15 text-ek-cream/90 hover:text-ek-gold-500"
+                  className="link-draw inline-flex min-h-11 items-center text-15 text-ek-cream/90 hover:text-ek-gold-500"
                 >
                   My account
                 </Link>
@@ -84,7 +84,7 @@ export function Footer() {
               <li>
                 <Link
                   href="/track"
-                  className="link-draw text-15 text-ek-cream/90 hover:text-ek-gold-500"
+                  className="link-draw inline-flex min-h-11 items-center text-15 text-ek-cream/90 hover:text-ek-gold-500"
                 >
                   Track your order
                 </Link>
@@ -92,7 +92,7 @@ export function Footer() {
               <li>
                 <Link
                   href="/wishlist"
-                  className="link-draw text-15 text-ek-cream/90 hover:text-ek-gold-500"
+                  className="link-draw inline-flex min-h-11 items-center text-15 text-ek-cream/90 hover:text-ek-gold-500"
                 >
                   Saved items
                 </Link>
@@ -101,7 +101,7 @@ export function Footer() {
                 <li key={link.href}>
                   <Link
                     href={link.href}
-                    className="link-draw text-15 text-ek-cream/90 hover:text-ek-gold-500"
+                    className="link-draw inline-flex min-h-11 items-center text-15 text-ek-cream/90 hover:text-ek-gold-500"
                   >
                     {link.label}
                   </Link>
@@ -119,7 +119,7 @@ export function Footer() {
                     on a link most people will never click. */}
                 <a
                   href="/contact#grievance"
-                  className="link-draw text-15 text-ek-cream/90 hover:text-ek-gold-500"
+                  className="link-draw inline-flex min-h-11 items-center text-15 text-ek-cream/90 hover:text-ek-gold-500"
                 >
                   Grievance officer
                 </a>

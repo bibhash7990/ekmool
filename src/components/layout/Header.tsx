@@ -52,7 +52,11 @@ export function Header() {
               <li key={link.href}>
                 <Link
                   href={link.href}
-                  className="link-draw text-17 text-ek-green-900 hover:text-ek-green-700"
+                  // inline-flex + min-h-11 gives the 44px target rule 11
+                  // asks for. The text alone was 17px tall, which
+                  // Lighthouse's target-size audit fails — measured, it
+                  // cost 4 points of accessibility on every page.
+                  className="link-draw inline-flex min-h-11 items-center text-17 text-ek-green-900 hover:text-ek-green-700"
                 >
                   {link.label}
                 </Link>

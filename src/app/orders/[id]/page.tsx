@@ -8,7 +8,7 @@ import {
   isReturnWindowOpen,
   RETURN_REASONS,
 } from "@/db/queries/returns";
-import { getSession } from "@/lib/session";
+import { getCustomerEmail } from "@/lib/account";
 import { formatPaise } from "@/lib/money";
 import { Eyebrow } from "@/components/ui/Eyebrow";
 import { SoilLine } from "@/components/ui/SoilLine";
@@ -66,7 +66,15 @@ export default async function OrderPage({
 
   if (!/^[0-9A-HJKMNP-TV-Z]{26}$/.test(id)) notFound();
 
-  const [order, session] = await Promise.all([getOrderById(id), getSession()]);
+  // getCustomerEmail, not getSession: the lookup cookie is only one of the
+  // two ways in, and a customer who signed in through Clerk has a verified
+  // email but no cookie. Reading the cookie alone treated them as a guest —
+  // they were sent to /track from their own order page, and the owner-only
+  // controls below stayed hidden on an order that is theirs.
+  const [order, viewerEmail] = await Promise.all([
+    getOrderById(id),
+    getCustomerEmail(),
+  ]);
   if (!order) notFound();
 
   const [history, existingReturn] = await Promise.all([
@@ -75,7 +83,7 @@ export default async function OrderPage({
   ]);
 
   const shortId = order.id.slice(-8).toUpperCase();
-  const isOwner = session?.email === order.customerEmail.toLowerCase();
+  const isOwner = viewerEmail === order.customerEmail.toLowerCase();
   const isCod = order.paymentMethod === "cod";
   const prepaid = order.paymentStatus === "paid";
   const canCancel = CANCELLABLE.has(order.status) && !prepaid;
@@ -96,7 +104,16 @@ export default async function OrderPage({
     <div className="mx-auto max-w-[900px] px-5 py-12 lg:py-16">
       {/* No Breadcrumbs component here on purpose: it emits BreadcrumbList
           structured data, and this page is noindex and private. */}
-      <Link href="/track" className="link-draw text-15 text-ek-green-700">
+      {/*
+        Signed in, this goes to the order history; signed out it goes to
+        the sign-in form, which is what /track is. Pointing it at /track
+        unconditionally sent a signed-in customer from their own order back
+        to a page asking them to prove who they are.
+      */}
+      <Link
+        href={viewerEmail ? "/account/orders" : "/track"}
+        className="link-draw text-15 text-ek-green-700"
+      >
         ← Your orders
       </Link>
 
@@ -347,11 +364,12 @@ export default async function OrderPage({
           <ButtonLink href="/products" variant="ghost">
             Continue shopping
           </ButtonLink>
-          {!session && (
-            <Link href="/track" className="link-draw text-17 text-ek-green-900">
-              See all your orders
-            </Link>
-          )}
+          <Link
+            href={viewerEmail ? "/account/orders" : "/track"}
+            className="link-draw text-17 text-ek-green-900"
+          >
+            See all your orders
+          </Link>
         </div>
       </section>
     </div>

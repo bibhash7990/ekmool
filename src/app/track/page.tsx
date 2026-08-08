@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { getSession } from "@/lib/session";
+import { getCustomerEmail } from "@/lib/account";
 import { Eyebrow } from "@/components/ui/Eyebrow";
 import { SoilLine } from "@/components/ui/SoilLine";
 import { TrackOrderForm } from "@/components/account/TrackOrderForm";
@@ -31,7 +31,10 @@ export default async function TrackPage({
   searchParams: Promise<{ ref?: string }>;
 }) {
   const { ref } = await searchParams;
-  const session = await getSession();
+  // getCustomerEmail, not getSession: a Clerk-authenticated customer has
+  // a verified email but no lookup cookie, and would be told they were
+  // signed out on the page whose whole job is signing in.
+  const viewerEmail = await getCustomerEmail();
 
   return (
     <div className="mx-auto max-w-[860px] px-5 py-16 lg:py-24">
@@ -40,9 +43,9 @@ export default async function TrackPage({
         Find your order.
       </h1>
 
-      {session ? (
+      {viewerEmail ? (
         <p className="mt-5 max-w-[54ch] text-17 text-ek-green-700">
-          You are signed in as <strong>{session.email}</strong> —{" "}
+          You are signed in as <strong>{viewerEmail}</strong> —{" "}
           <Link href="/account" className="link-draw text-ek-green-900">
             go to your account
           </Link>

@@ -157,6 +157,15 @@ export const hasClerk: boolean =
  * The host is encoded in the publishable key — base64 after the prefix,
  * with a trailing `$` — so it needs no second variable that could drift
  * out of step with the key beside it.
+ *
+ * That decodes to the FRONTEND API host, `<slug>.clerk.accounts.dev`,
+ * which 404s on /sign-in. The hosted pages live one label shorter, at
+ * `<slug>.accounts.dev`, so the `clerk.` segment is dropped rather than
+ * rewritten — it sits in the middle of the host, not at the front.
+ *
+ * Production instances encode a custom domain instead (`clerk.example.com`)
+ * and serve their pages from `accounts.example.com`, which is the same
+ * transformation.
  */
 export const clerkSignInUrl: string = (() => {
   if (!hasClerk) return "";
@@ -166,7 +175,10 @@ export const clerkSignInUrl: string = (() => {
       .toString("utf8")
       .replace(/\$$/, "");
     if (!/^[a-z0-9.-]+$/i.test(host)) return "";
-    return `https://${host.replace(/^clerk\./, "accounts.")}/sign-in`;
+    const accountsHost = host.startsWith("clerk.")
+      ? `accounts.${host.slice("clerk.".length)}`
+      : host.replace(".clerk.", ".");
+    return `https://${accountsHost}/sign-in`;
   } catch {
     return "";
   }

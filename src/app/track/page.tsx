@@ -5,6 +5,7 @@ import { getSession } from "@/lib/session";
 import { Eyebrow } from "@/components/ui/Eyebrow";
 import { SoilLine } from "@/components/ui/SoilLine";
 import { TrackOrderForm } from "@/components/account/TrackOrderForm";
+import { ClerkSignInPrompt } from "@/components/account/ClerkSignInPrompt";
 import { QueuedOrders } from "@/components/checkout/QueuedOrders";
 import { turnstileSiteKey } from "@/lib/turnstile";
 
@@ -63,6 +64,8 @@ export default async function TrackPage({
         autoFocus={!ref}
         turnstileSiteKey={turnstileSiteKey}
       />
+
+      <ClerkSignInPrompt />
 
       <p className="mt-10 max-w-[52ch] text-15 text-ek-green-700">
         Lost the confirmation email? Check your spam folder first — then{" "}

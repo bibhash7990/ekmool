@@ -146,6 +146,32 @@ export const hasClerk: boolean =
   looksReal(str(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY), "pk_") &&
   looksReal(str(process.env.CLERK_SECRET_KEY), "sk_");
 
+/**
+ * Clerk's hosted sign-in page, or "" when Clerk is absent.
+ *
+ * There is no /sign-in route in this app: mounting ClerkProvider high
+ * enough to serve one would put Clerk's client JS on public pages, which
+ * the script budget does not have room for. The admin area already relies
+ * on the hosted page, and this is the same page.
+ *
+ * The host is encoded in the publishable key — base64 after the prefix,
+ * with a trailing `$` — so it needs no second variable that could drift
+ * out of step with the key beside it.
+ */
+export const clerkSignInUrl: string = (() => {
+  if (!hasClerk) return "";
+  const key = str(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
+  try {
+    const host = Buffer.from(key.replace(/^pk_(test|live)_/, ""), "base64")
+      .toString("utf8")
+      .replace(/\$$/, "");
+    if (!/^[a-z0-9.-]+$/i.test(host)) return "";
+    return `https://${host.replace(/^clerk\./, "accounts.")}/sign-in`;
+  } catch {
+    return "";
+  }
+})();
+
 export const hasRazorpay: boolean =
   looksReal(str(process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID), "rzp_") &&
   looksReal(str(process.env.RAZORPAY_KEY_SECRET));

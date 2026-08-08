@@ -75,6 +75,14 @@ export function Footer() {
             <ul className="mt-5 flex flex-col gap-3">
               <li>
                 <Link
+                  href="/account"
+                  className="link-draw text-15 text-ek-cream/90 hover:text-ek-gold-500"
+                >
+                  My account
+                </Link>
+              </li>
+              <li>
+                <Link
                   href="/track"
                   className="link-draw text-15 text-ek-cream/90 hover:text-ek-gold-500"
                 >

@@ -144,10 +144,23 @@ export function attachSession(response: NextResponse, email: string): void {
 }
 
 export function clearSession(response: NextResponse): void {
-  response.cookies.set({
-    name: SESSION_COOKIE,
-    value: "",
-    maxAge: 0,
-    ...cookieOptions(),
-  });
+  // Deleted twice, once with Secure and once without.
+  //
+  // A cookie is cleared only by a Set-Cookie whose attributes match the one
+  // that created it, and `secure` here is derived from NEXT_PUBLIC_APP_URL.
+  // Leave that unset on an HTTPS deployment — which is easy, because the
+  // URL is not known until the first deploy has already happened — and the
+  // session is written by the browser as Secure (it arrived over HTTPS) but
+  // cleared without it. The two do not match, the cookie survives, and
+  // signing out silently does nothing: the customer stays signed in and
+  // their orders stay visible on a shared machine.
+  //
+  // Sending both costs one header and removes the dependency on
+  // configuration being right.
+  // Appended as raw headers rather than through response.cookies.set,
+  // which keys by cookie name — setting it twice replaces the first rather
+  // than emitting both.
+  const base = `${SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`;
+  response.headers.append("set-cookie", base);
+  response.headers.append("set-cookie", `${base}; Secure`);
 }

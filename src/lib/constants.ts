@@ -29,8 +29,15 @@ export const NAV_LINKS = [
  *
  * Points at /account rather than /track: with a session that is the order
  * history, and without one the account layout redirects to /track anyway.
+ *
+ * Labelled "My account", not "Orders". "Orders" described the destination
+ * accurately — it lands on the order list — but a shopper scanning a
+ * header for somewhere to manage their details does not read "Orders" as
+ * that place, and reported the account section as missing when it was
+ * present in the nav the whole time. The link now names the section rather
+ * than its first page.
  */
-export const ACCOUNT_LINK = { href: "/account", label: "Orders" } as const;
+export const ACCOUNT_LINK = { href: "/account", label: "My account" } as const;
 
 export const POLICY_LINKS = [
   { href: "/privacy-policy", label: "Privacy Policy" },

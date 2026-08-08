@@ -20,6 +20,13 @@ export function SignOutButton({ className = "" }: { className?: string }) {
         setBusy(true);
         try {
           await fetch("/api/account/logout", { method: "POST" });
+          // Leave the account area rather than refreshing in place. Every
+          // page under /account redirects to /track without a session, so a
+          // refresh would land on the sign-in form anyway — but via a
+          // redirect, which keeps the signed-in render in the back/forward
+          // cache. Navigating explicitly and then refreshing discards it,
+          // so Back does not show the previous customer's orders.
+          router.replace("/");
           router.refresh();
         } finally {
           setBusy(false);

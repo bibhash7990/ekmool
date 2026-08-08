@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { hasClerk } from "@/lib/env";
 import { requireAdmin } from "@/lib/auth";
+import { AdminSignOut } from "@/components/admin/AdminSignOut";
 
 export const metadata: Metadata = {
   title: "Admin",
@@ -94,7 +95,12 @@ export default async function AdminLayout({
               ))}
             </ul>
           </nav>
-          {hasClerk && <UserButton />}
+          {hasClerk && (
+            <div className="flex items-center gap-4">
+              <AdminSignOut />
+              <UserButton />
+            </div>
+          )}
         </div>
         {children}
       </div>

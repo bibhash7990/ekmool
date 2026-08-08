@@ -4,8 +4,10 @@ Every visible string on the site becomes editable from `/admin/content`,
 without breaking the two properties the site is built on: browsing never
 touches the database, and the site works with the database stopped.
 
-Nothing in this document is implemented yet. It is the design to agree
-before any code is written.
+**Status:** phases 1 and 2 are shipped. Phase 3 — migrating the pages to
+`t()` — is the next one, and is where the site starts reading any of this.
+Until then the editor writes rows that nothing renders, which is the
+phase boundary working as designed, not a bug.
 
 ---
 
@@ -132,7 +134,21 @@ must still pass.
 
 **2 · Admin surface** — `/admin/content` with the grouped editor, server
 action, Zod validation, audit-log entry. Editing works but nothing on the
-public site reads it yet.
+public site reads it yet. **Shipped.** Three decisions were taken during
+the build that the design above did not settle:
+
+- **A form per field, not one form per page.** Saving a heading must not
+  resubmit forty untouched strings: that would make every save a
+  whole-page write, make the audit log claim forty edits where there was
+  one, and lose the work everywhere when validation failed anywhere.
+- **Saving a value equal to the default DELETEs the row.** Storing a copy
+  of the default would silently pin that string, so a later edit to
+  `defaults.ts` would appear to do nothing on the live site with no way to
+  see why. "Revert to original" therefore reverts rather than pins.
+- **Orphans are listed with their text and removed by hand.** A key
+  normally disappears because it was renamed, and the orphaned text is
+  usually what belongs in its replacement — deleting it automatically
+  would destroy it at the moment it is needed.
 
 **3 · Migrate the pages** — replace hardcoded strings with `t()` calls, one
 page group at a time: policies first (highest value, lowest risk), then

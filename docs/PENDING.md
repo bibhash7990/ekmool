@@ -241,9 +241,51 @@ UptimeRobot is free; point it at `/api/health`.
 Optional, printed on the invoice only when present. You are selling food,
 so it is worth adding.
 
-### 🟡 Performance headroom on two pages
+### 🟠 Every page is roughly double its script budget
 
-`/products` (3.1 s LCP, perf 94) and `/products/[slug]` (3.4 s, perf 92)
-are the slowest pages. Not a regression and both well within budget —
-this is simply where the remaining headroom is if it is ever wanted.
-Accessibility and SEO are 100 across every audited page.
+Measured 2026-08-08 with `npm run audit` against `next start` on 3100:
+
+| Page | Perf | A11y | SEO | Script |
+|---|---|---|---|---|
+| `/` | 95 | 100 | 100 | 371 / 190 KB |
+| `/products` | 82 | 100 | 100 | 373 / 190 KB |
+| `/products/[slug]` | 79 | 100 | 100 | 376 / 200 KB |
+| `/blog/*` | 94 | 100 | 100 | 369 / 190 KB |
+
+Six gate failures: four over budget, two below the performance floor. The
+figures in this section previously read "perf 94 / 92, well within budget";
+that is no longer true and the old numbers have been removed rather than
+left to reassure.
+
+**Not caused by the content work.** Checked rather than assumed: no CMS
+identifier (`site_content`, `CONTENT_DEFAULTS`, `saveContentAction`,
+`home.hero.heading`) appears in any chunk the homepage loads. Every file
+that phase 1 and 2 added is `server-only`, a migration, or under `/admin`.
+
+**Not mainly the Vercel packages either.** `@vercel/analytics` and
+`@vercel/speed-insights` occupy one 32 KB chunk — 5% of the 637 KB
+uncompressed total, not the 180 KB overage.
+
+The bulk is framework baseline: one 205 KB React chunk and two Next.js
+router chunks of 113 KB each.
+
+**Most of the gap is a measurement artefact, but not all of it.** `next
+start` serves chunks with no `Content-Encoding`, so Lighthouse counts
+uncompressed bytes. Production does compress. Measured against
+`ekmool-ten.vercel.app`, same 16 chunks:
+
+| | Bytes |
+|---|---|
+| Uncompressed | 638 KB |
+| Transferred (brotli) | **209 KB** |
+
+So the real figure is 209 KB against a 190 KB budget — about 19 KB over,
+not 181 KB over. Still a genuine miss, and the 79–82 performance scores
+are measured on metrics that compression does not fix.
+
+Two things follow. The overage is small enough that dropping
+`@vercel/analytics` and `@vercel/speed-insights` (one 32 KB uncompressed
+chunk) would plausibly clear it — worth measuring before anything more
+invasive. And `scripts/audit.mjs` should either request compression or
+state that its budget is an uncompressed one, because as it stands a local
+run overstates the number by ~3x and cannot be compared to production.

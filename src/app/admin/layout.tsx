@@ -28,6 +28,7 @@ const PRIMARY = [
 ];
 
 const SECONDARY = [
+  { href: "/admin/content", label: "Content" },
   { href: "/admin/reports", label: "Reports" },
   { href: "/admin/customers", label: "Customers" },
   { href: "/admin/audit", label: "Activity" },

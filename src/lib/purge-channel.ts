@@ -30,11 +30,29 @@ export function instanceId(): string {
   return globalThis.__ekmoolInstanceId;
 }
 
+/**
+ * Every kind, as a runtime value. The guard below reads this rather than
+ * listing the kinds a second time: when "content" was added to PurgeKind
+ * the guard was not updated, so every instance but the editing one dropped
+ * the purge on the floor and kept serving the old copy for an hour — the
+ * exact ghost the channel exists to prevent. A union and a hand-written
+ * list of the same union cannot be kept in step by the compiler; deriving
+ * one from the other is what makes the next addition safe.
+ */
+const PURGE_KINDS = ["catalog", "reviews", "content"] as const;
+
+// Fails to compile if PURGE_KINDS and PurgeKind ever drift apart.
+type KindsAreExhaustive = PurgeKind extends (typeof PURGE_KINDS)[number]
+  ? true
+  : never;
+const _kindsAreExhaustive: KindsAreExhaustive = true;
+void _kindsAreExhaustive;
+
 export function isPurgeMessage(value: unknown): value is PurgeMessage {
   if (!value || typeof value !== "object") return false;
   const message = value as Partial<PurgeMessage>;
   return (
-    (message.kind === "catalog" || message.kind === "reviews") &&
+    PURGE_KINDS.includes(message.kind as PurgeKind) &&
     typeof message.origin === "string"
   );
 }

@@ -1,4 +1,5 @@
 import { appUrl, clerkSignInUrl } from "@/lib/env";
+import { getContent, t } from "@/lib/content";
 import { SoilLine } from "@/components/ui/SoilLine";
 
 /**
@@ -20,19 +21,22 @@ import { SoilLine } from "@/components/ui/SoilLine";
  * for it, an order placed as a guest is reachable by lookup exactly as
  * before, and nothing here is required to buy anything.
  */
-export function ClerkSignInPrompt() {
+export async function ClerkSignInPrompt() {
+  // Before getContent, so the no-Clerk deployment does not pay for a read
+  // whose result it throws away.
   if (!clerkSignInUrl) return null;
+
+  const content = await getContent();
 
   return (
     <>
       <SoilLine align="left" className="my-10 max-w-xs" />
 
       <h2 className="font-display text-26 text-ek-green-900">
-        Or sign in with your email
+        {t(content, "track.signin.heading")}
       </h2>
       <p className="mt-3 max-w-[54ch] text-15 text-ek-green-700">
-        If you have signed in here before, use the same email address you
-        ordered with and your orders will be waiting — no reference needed.
+        {t(content, "track.signin.body")}
       </p>
       {/*
         Clerk's hosted sign-in, not a route of our own. There is no
@@ -48,7 +52,7 @@ export function ClerkSignInPrompt() {
         href={`${clerkSignInUrl}?redirect_url=${encodeURIComponent(`${appUrl}/account`)}`}
         className="mt-5 inline-flex min-h-11 items-center rounded-xs border border-ek-green-900 px-5 text-15 text-ek-green-900 transition-colors hover:bg-ek-green-900 hover:text-ek-cream"
       >
-        Sign in with email
+        {t(content, "track.signin.cta")}
       </a>
     </>
   );

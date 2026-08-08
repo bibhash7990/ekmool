@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
-import { NAV_LINKS, POLICY_LINKS, SITE_TAGLINE } from "@/lib/constants";
+import { getContent, t } from "@/lib/content";
+import { NAV_LINKS, POLICY_LINKS } from "@/lib/constants";
 import { PRODUCT_SLUGS } from "@/lib/constants";
 import { ConsentSettingsLink } from "@/components/consent/ConsentSettingsLink";
 import { NewsletterSignup } from "./NewsletterSignup";
@@ -13,7 +14,14 @@ const PRODUCT_NAMES: Record<string, string> = {
   "byadagi-chilli-powder": "Byadagi Chilli",
 };
 
-export function Footer() {
+/**
+ * Async because it reads editable copy. That is safe on every page: the
+ * footer is rendered from the server layout, and getContent is cached and
+ * tagged, so a statically generated page bakes the copy in at build time
+ * and browsing still never touches MySQL.
+ */
+export async function Footer() {
+  const content = await getContent();
   const year = new Date().getFullYear();
 
   return (
@@ -31,15 +39,18 @@ export function Footer() {
               height={147}
               className="h-[100px] w-auto"
             />
-            <p className="eyebrow mt-6 text-ek-gold-500">{SITE_TAGLINE}</p>
+            <p className="eyebrow mt-6 text-ek-gold-500">
+              {t(content, "site.tagline")}
+            </p>
             <p className="mt-4 max-w-xs text-15 text-ek-cream/75">
-              One root, one soil. Every pack is traced to the district that
-              earned its GI tag.
+              {t(content, "footer.blurb")}
             </p>
           </div>
 
           <nav aria-label="Products">
-            <h2 className="eyebrow text-ek-cream/60">Shop</h2>
+            <h2 className="eyebrow text-ek-cream/60">
+              {t(content, "footer.shop.heading")}
+            </h2>
             <ul className="mt-5 flex flex-col gap-3">
               {PRODUCT_SLUGS.map((slug) => (
                 <li key={slug}>
@@ -55,7 +66,9 @@ export function Footer() {
           </nav>
 
           <nav aria-label="Company">
-            <h2 className="eyebrow text-ek-cream/60">Company</h2>
+            <h2 className="eyebrow text-ek-cream/60">
+              {t(content, "footer.company.heading")}
+            </h2>
             <ul className="mt-5 flex flex-col gap-3">
               {NAV_LINKS.map((link) => (
                 <li key={link.href}>
@@ -63,7 +76,7 @@ export function Footer() {
                     href={link.href}
                     className="link-draw inline-flex min-h-11 items-center text-15 text-ek-cream/90 hover:text-ek-gold-500"
                   >
-                    {link.label}
+                    {t(content, link.key)}
                   </Link>
                 </li>
               ))}
@@ -71,14 +84,16 @@ export function Footer() {
           </nav>
 
           <nav aria-label="Help and policies">
-            <h2 className="eyebrow text-ek-cream/60">Help</h2>
+            <h2 className="eyebrow text-ek-cream/60">
+              {t(content, "footer.help.heading")}
+            </h2>
             <ul className="mt-5 flex flex-col gap-3">
               <li>
                 <Link
                   href="/account"
                   className="link-draw inline-flex min-h-11 items-center text-15 text-ek-cream/90 hover:text-ek-gold-500"
                 >
-                  My account
+                  {t(content, "footer.help.account")}
                 </Link>
               </li>
               <li>
@@ -86,7 +101,7 @@ export function Footer() {
                   href="/track"
                   className="link-draw inline-flex min-h-11 items-center text-15 text-ek-cream/90 hover:text-ek-gold-500"
                 >
-                  Track your order
+                  {t(content, "footer.help.track")}
                 </Link>
               </li>
               <li>
@@ -94,7 +109,7 @@ export function Footer() {
                   href="/wishlist"
                   className="link-draw inline-flex min-h-11 items-center text-15 text-ek-cream/90 hover:text-ek-gold-500"
                 >
-                  Saved items
+                  {t(content, "footer.help.wishlist")}
                 </Link>
               </li>
               {POLICY_LINKS.map((link) => (
@@ -121,7 +136,7 @@ export function Footer() {
                   href="/contact#grievance"
                   className="link-draw inline-flex min-h-11 items-center text-15 text-ek-cream/90 hover:text-ek-gold-500"
                 >
-                  Grievance officer
+                  {t(content, "footer.help.grievance")}
                 </a>
               </li>
             </ul>
@@ -139,7 +154,7 @@ export function Footer() {
                 sits on every page rather than inside an account area a
                 guest does not have. */}
             <ConsentSettingsLink className="min-h-11 cursor-pointer text-left underline underline-offset-4 hover:text-ek-gold-500 sm:min-h-0" />
-            <p>FSSAI licensed · Made in India</p>
+            <p>{t(content, "footer.legal.fssai")}</p>
           </div>
         </div>
       </div>

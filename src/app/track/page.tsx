@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { getCustomerEmail } from "@/lib/account";
+import { getContent, t } from "@/lib/content";
 import { Eyebrow } from "@/components/ui/Eyebrow";
 import { SoilLine } from "@/components/ui/SoilLine";
 import { TrackOrderForm } from "@/components/account/TrackOrderForm";
@@ -34,13 +35,16 @@ export default async function TrackPage({
   // getCustomerEmail, not getSession: a Clerk-authenticated customer has
   // a verified email but no lookup cookie, and would be told they were
   // signed out on the page whose whole job is signing in.
-  const viewerEmail = await getCustomerEmail();
+  const [viewerEmail, content] = await Promise.all([
+    getCustomerEmail(),
+    getContent(),
+  ]);
 
   return (
     <div className="mx-auto max-w-[860px] px-5 py-16 lg:py-24">
-      <Eyebrow>Your orders</Eyebrow>
+      <Eyebrow>{t(content, "track.eyebrow")}</Eyebrow>
       <h1 className="mt-5 font-display text-46 text-ek-green-900">
-        Find your order.
+        {t(content, "track.heading")}
       </h1>
 
       {viewerEmail ? (
@@ -54,9 +58,7 @@ export default async function TrackPage({
         </p>
       ) : (
         <p className="mt-5 max-w-[54ch] text-17 text-ek-green-700">
-          There is no account to sign into and no password to remember. Give
-          us the reference from your confirmation and the email you ordered
-          with, and everything you have bought from us is there.
+          {t(content, "track.body.guest")}
         </p>
       )}
 

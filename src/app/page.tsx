@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { getCatalog } from "@/db/queries/products";
 import { getRecentReviews } from "@/db/queries/reviews";
+import { getContent, t } from "@/lib/content";
 import { FREE_SHIPPING_THRESHOLD_PAISE } from "@/lib/constants";
 import { formatPaise } from "@/lib/money";
 import { productItemListJsonLd } from "@/lib/seo/jsonld";
@@ -80,12 +81,15 @@ const ORIGINS = [
 ] as const;
 
 export default async function HomePage() {
-  // Both cached and tagged, so this page is built once and served from
-  // static output — browsing the home page never touches MySQL, which is
-  // the property scripts/chaos.mjs and test:db-down assert.
-  const [products, reviews] = await Promise.all([
+  // All three are cached and tagged, so this page is built once and served
+  // from static output — browsing the home page never touches MySQL, which
+  // is the property scripts/chaos.mjs and test:db-down assert. getContent
+  // holds that line too: it falls back to the compiled-in defaults, so an
+  // unreachable database changes the copy not at all.
+  const [products, reviews, content] = await Promise.all([
     getCatalog(),
     getRecentReviews(3),
+    getContent(),
   ]);
 
   return (
@@ -96,24 +100,31 @@ export default async function HomePage() {
       <section className="mx-auto max-w-[1180px] px-5 pt-12 pb-16 lg:px-8 lg:pt-20 lg:pb-24">
         <div className="grid items-center gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:gap-20">
           <div>
-            <Eyebrow>Single Origin · GI-Tagged · India</Eyebrow>
+            <Eyebrow>{t(content, "home.hero.eyebrow")}</Eyebrow>
 
+            {/*
+              Three keys, not one. The line break and the gold word are
+              design rather than copy: an editable string carrying the
+              markup would let a typo in /admin break the heading, and a
+              single flat string would silently drop both.
+            */}
             <h1 className="mt-6 font-display text-46 text-ek-green-900 lg:text-64">
-              The root runs deeper
+              {t(content, "home.hero.heading.line1")}
               <br />
-              than the <span className="text-ek-gold-800">badge</span>.
+              {t(content, "home.hero.heading.line2")}{" "}
+              <span className="text-ek-gold-800">
+                {t(content, "home.hero.heading.accent")}
+              </span>
+              .
             </h1>
 
             <p className="mt-7 max-w-[46ch] text-20 text-ek-green-700">
-              Five foods, five districts, one standard. We buy where the
-              Geographical Indication was earned — Kandhamal, Lakadong,
-              Mithila, Guntur, Byadagi — and mill in small batches so what
-              reaches you still smells of the field it came from.
+              {t(content, "home.hero.body")}
             </p>
 
             <div className="mt-10 flex flex-wrap items-center gap-6">
               <ButtonLink href="/products" size="lg">
-                Shop single origin
+                {t(content, "home.hero.cta.primary")}
               </ButtonLink>
               <Link
                 href="/about"

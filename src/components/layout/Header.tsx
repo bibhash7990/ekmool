@@ -4,9 +4,21 @@ import { CartBadge } from "./CartBadge";
 import { MobileNav } from "./MobileNav";
 import { SearchForm } from "@/components/search/SearchForm";
 import { HeartIcon } from "@/components/icons";
+import { getContent, t } from "@/lib/content";
 import { ACCOUNT_LINK, NAV_LINKS } from "@/lib/constants";
 
-export function Header() {
+export async function Header() {
+  const content = await getContent();
+
+  // Resolved here, once, and handed to MobileNav as a prop. MobileNav is a
+  // client component and cannot read the content map itself — importing
+  // getContent there would pull the whole server content module into the
+  // browser bundle.
+  const links = [...NAV_LINKS, ACCOUNT_LINK].map((link) => ({
+    href: link.href,
+    label: t(content, link.key),
+  }));
+
   return (
     <header
       data-site-chrome
@@ -18,7 +30,7 @@ export function Header() {
               than imported inside MobileNav. MobileNav is a client
               component; anything it imports gets bundled for the browser,
               and this form deliberately ships no JavaScript at all. */}
-          <MobileNav>
+          <MobileNav links={links}>
             <SearchForm id="mobile-nav-q" className="w-full" />
           </MobileNav>
           <Link
@@ -48,7 +60,7 @@ export function Header() {
 
         <nav aria-label="Primary" className="hidden md:block">
           <ul className="flex items-center gap-5 lg:gap-8">
-            {[...NAV_LINKS, ACCOUNT_LINK].map((link) => (
+            {links.map((link) => (
               <li key={link.href}>
                 <Link
                   href={link.href}

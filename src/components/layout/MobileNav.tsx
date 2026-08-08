@@ -3,14 +3,29 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { MenuIcon, CloseIcon } from "@/components/icons";
-import { ACCOUNT_LINK, NAV_LINKS } from "@/lib/constants";
+
+export interface MobileNavLink {
+  href: string;
+  label: string;
+}
 
 /**
  * `children` is the search form, handed in from the (server) Header rather
  * than imported here — importing it would drag its markup into the client
  * bundle for a form that has no client behaviour.
+ *
+ * `links` arrive resolved for the same reason. The labels are editable copy
+ * and live in the content map, which only the server can read; calling
+ * getContent here would pull the content module, mysql2 and all, towards
+ * the browser bundle.
  */
-export function MobileNav({ children }: { children?: React.ReactNode }) {
+export function MobileNav({
+  links,
+  children,
+}: {
+  links: readonly MobileNavLink[];
+  children?: React.ReactNode;
+}) {
   const [open, setOpen] = useState(false);
   const openButtonRef = useRef<HTMLButtonElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -102,7 +117,7 @@ export function MobileNav({ children }: { children?: React.ReactNode }) {
               reachable however many links there are. */}
           <nav aria-label="Mobile" className="flex-1 overflow-y-auto px-5 py-6">
             <ul className="flex flex-col">
-              {[...NAV_LINKS, ACCOUNT_LINK].map((link) => (
+              {links.map((link) => (
                 <li key={link.href} className="border-b border-ek-green-200">
                   <Link
                     href={link.href}

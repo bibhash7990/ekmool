@@ -1,5 +1,13 @@
+// Type-only: this module is imported by client components, and a type
+// import is erased at compile time, so nothing from the content layer is
+// bundled for the browser.
+import type { ContentKey } from "@/content/defaults";
+
 export const SITE_NAME = "Ekmool";
-export const SITE_TAGLINE = "Single Origin · India";
+// The tagline moved to src/content/defaults.ts as "site.tagline" so the
+// owner can change it without a deploy. Deleted rather than left here
+// pointing at the same words: two sources for one string drift, and the
+// stale one is the one somebody imports next.
 export const SITE_DESCRIPTION =
   "GI-tagged, single-origin Indian foods — Kandhamal & Lakadong turmeric, Mithila makhana, Guntur & Byadagi chilli — traced to one soil, one root.";
 
@@ -14,13 +22,28 @@ export const PRODUCT_SLUGS = [
 
 export type ProductSlug = (typeof PRODUCT_SLUGS)[number];
 
+/**
+ * `label` is the wording as shipped; `key` is where the editable version
+ * lives. Both, rather than the key alone, because these are imported by a
+ * client component (MobileNav) that cannot read the content map — it
+ * receives resolved labels as props from the server Header, and the label
+ * here is what renders anywhere that has no map to hand.
+ *
+ * Keeping the key beside the href is what stops the two drifting: a link
+ * added here without a key is a compile error, not a label that silently
+ * ignores the admin.
+ */
 export const NAV_LINKS = [
-  { href: "/products", label: "Shop" },
-  { href: "/about", label: "About" },
-  { href: "/blog", label: "Journal" },
-  { href: "/faq", label: "FAQ" },
-  { href: "/contact", label: "Contact" },
-] as const;
+  { href: "/products", label: "Shop", key: "nav.shop.label" },
+  { href: "/about", label: "About", key: "nav.about.label" },
+  { href: "/blog", label: "Journal", key: "nav.blog.label" },
+  { href: "/faq", label: "FAQ", key: "nav.faq.label" },
+  { href: "/contact", label: "Contact", key: "nav.contact.label" },
+] as const satisfies readonly {
+  href: string;
+  label: string;
+  key: ContentKey;
+}[];
 
 /**
  * Header-only. Kept out of NAV_LINKS because the footer renders that list
@@ -37,7 +60,11 @@ export const NAV_LINKS = [
  * present in the nav the whole time. The link now names the section rather
  * than its first page.
  */
-export const ACCOUNT_LINK = { href: "/account", label: "My account" } as const;
+export const ACCOUNT_LINK = {
+  href: "/account",
+  label: "My account",
+  key: "nav.account.label",
+} as const satisfies { href: string; label: string; key: ContentKey };
 
 export const POLICY_LINKS = [
   { href: "/privacy-policy", label: "Privacy Policy" },

@@ -167,7 +167,7 @@ export const hasClerk: boolean =
  * and serve their pages from `accounts.example.com`, which is the same
  * transformation.
  */
-export const clerkSignInUrl: string = (() => {
+function clerkAccountsHost(): string {
   if (!hasClerk) return "";
   const key = str(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
   try {
@@ -175,14 +175,21 @@ export const clerkSignInUrl: string = (() => {
       .toString("utf8")
       .replace(/\$$/, "");
     if (!/^[a-z0-9.-]+$/i.test(host)) return "";
-    const accountsHost = host.startsWith("clerk.")
+    return host.startsWith("clerk.")
       ? `accounts.${host.slice("clerk.".length)}`
       : host.replace(".clerk.", ".");
-    return `https://${accountsHost}/sign-in`;
   } catch {
     return "";
   }
-})();
+}
+
+export const clerkSignInUrl: string = clerkAccountsHost()
+  ? `https://${clerkAccountsHost()}/sign-in`
+  : "";
+
+// No clerkSignOutUrl counterpart: Clerk serves no hosted sign-out page —
+// /sign-out on the accounts host is a 404, measured — so the Clerk session
+// is revoked server-side in /api/account/logout instead.
 
 export const hasRazorpay: boolean =
   looksReal(str(process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID), "rzp_") &&

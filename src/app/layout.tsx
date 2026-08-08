@@ -5,6 +5,7 @@ import "./globals.css";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { AnalyticsLoader } from "@/components/analytics/AnalyticsLoader";
+import { VercelAnalytics } from "@/components/analytics/VercelAnalytics";
 import { ConsentBanner } from "@/components/consent/ConsentBanner";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { StoreProvider } from "@/store/StoreProvider";
@@ -124,6 +125,7 @@ export default function RootLayout({
           </main>
           <Footer />
           <AnalyticsLoader />
+          <VercelAnalytics />
           <ConsentBanner />
         </StoreProvider>
         {process.env.NODE_ENV === "production" && (

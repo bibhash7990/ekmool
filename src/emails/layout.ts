@@ -31,6 +31,7 @@ export function renderEmailShell({
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="zero-threat-verification" content="zeroThreat=MTA2Nzc=TVRBMk56Yz0=TVRBMk56Yz">
 <title>${escapeHtml(heading)}</title>
 </head>
 <body style="margin:0;padding:0;background:${PAPER};">

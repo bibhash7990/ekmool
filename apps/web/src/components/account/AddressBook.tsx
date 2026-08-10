@@ -8,8 +8,8 @@ import {
   type ActionResult,
 } from "@/app/account/actions";
 import type { CustomerAddress } from "@/db/queries/customers";
-import { INDIAN_STATE_OPTIONS } from "@/lib/validation/checkout";
-import { ADDRESS_LABEL_SUGGESTIONS } from "@/lib/validation/account";
+import { INDIAN_STATE_OPTIONS } from "@ekmool/contracts/checkout";
+import { ADDRESS_LABEL_SUGGESTIONS } from "@ekmool/contracts/account";
 import { Button } from "@/components/ui/Button";
 
 /**

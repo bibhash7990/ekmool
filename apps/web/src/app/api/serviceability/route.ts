@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { checkPincode } from "@/lib/serviceability";
+import { checkPincode } from "@ekmool/core/serviceability";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
  * PIN code to circle and delivery estimate.
  *
  * A route rather than a client-side lookup, for one reason: the prefix
- * tables in lib/serviceability.ts are the kind of data that only grows —
+ * tables in @ekmool/core/serviceability are the kind of data that only grows —
  * real courier serviceability, pincode-level ETAs, cash-on-delivery
  * exclusions — and none of that should ever become bytes every visitor
  * downloads to find out about one PIN code they already know.

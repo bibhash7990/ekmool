@@ -24,7 +24,7 @@ import {
   FREE_SHIPPING_THRESHOLD_PAISE,
   FLAT_SHIPPING_PAISE,
 } from "@/lib/constants";
-import { checkoutSchema, INDIAN_STATE_OPTIONS } from "@/lib/validation/checkout";
+import { checkoutSchema, INDIAN_STATE_OPTIONS } from "@ekmool/contracts/checkout";
 import { track } from "@/lib/analytics";
 import { HONEYPOT_FIELD, readHoneypot } from "@/lib/honeypot";
 import { HoneypotField } from "@/components/security/HoneypotField";

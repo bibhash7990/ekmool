@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { PolicyPage, PolicySection } from "@/components/legal/PolicyPage";
 import { getContent, t } from "@/lib/content";
 import { renderMarkdown } from "@/lib/markdown";
-import { DELIVERY_ZONES, DISPATCH_DAYS } from "@/lib/serviceability";
+import { DELIVERY_ZONES, DISPATCH_DAYS } from "@ekmool/core/serviceability";
 
 export const metadata: Metadata = {
   title: "Shipping Policy — Delivery Times & Charges",
@@ -51,7 +51,7 @@ export default async function ShippingPolicy() {
           NOT editable, deliberately, and the one section split into a
           before and an after so it can stay that way.
 
-          The zones render from lib/serviceability.ts, which is the same
+          The zones render from @ekmool/core/serviceability, which is the same
           table the PIN code checker on a product page reads. A policy and
           a widget quoting different numbers is how a shop ends up with a
           promise it did not know it had made — so this cannot be a

@@ -10,6 +10,7 @@
     "build": "turbo build --filter=web",
     "typecheck": "turbo typecheck",
     "lint": "turbo lint",
+    "check:packages": "node scripts/check-shared-packages.mjs",
     "web": "pnpm --filter web"
   },
   "devDependencies": {

@@ -4,7 +4,7 @@ import { reorderProductsAction } from "@/app/admin/catalog-actions";
 import { ReorderList } from "@/components/admin/ReorderList";
 import { Eyebrow } from "@/components/ui/Eyebrow";
 import { formatPaise } from "@/lib/money";
-import { formatRateBps } from "@/lib/gst";
+import { formatRateBps } from "@ekmool/core/gst";
 
 export const dynamic = "force-dynamic";
 

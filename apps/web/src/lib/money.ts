@@ -1,23 +1,11 @@
-/** All money is stored as integer paise. These helpers are display-only. */
-
-const inr = new Intl.NumberFormat("en-IN", {
-  style: "currency",
-  currency: "INR",
-  maximumFractionDigits: 0,
-});
-
-const inrWithPaise = new Intl.NumberFormat("en-IN", {
-  style: "currency",
-  currency: "INR",
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
-
-export function formatPaise(paise: number): string {
-  const rupees = paise / 100;
-  return paise % 100 === 0 ? inr.format(rupees) : inrWithPaise.format(rupees);
-}
-
-export function paiseToRupees(paise: number): number {
-  return paise / 100;
-}
+/**
+ * Re-export shim. The implementation is in @ekmool/core/money.
+ *
+ * Kept because `@/lib/money` is imported by about thirty components and by
+ * scripts/test-home.mjs through the `@/` resolve hook. Rewriting all of them
+ * is thirty-odd chances to introduce a typo in a change whose entire claim is
+ * that nothing changed, and `formatPaise` is not a name anyone needs to
+ * re-learn. The modules with a handful of call sites — gst, coupons,
+ * serviceability, search — were rewritten and deleted instead.
+ */
+export { formatPaise, paiseToRupees } from "@ekmool/core/money";

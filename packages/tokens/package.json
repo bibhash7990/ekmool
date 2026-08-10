@@ -1,0 +1,16 @@
+{
+  "name": "@ekmool/tokens",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/tokens.ts",
+    "./theme.css": "./dist/theme.css"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "emit": "node scripts/emit-css.mjs",
+    "check": "node scripts/emit-css.mjs --check"
+  }
+}

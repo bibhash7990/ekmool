@@ -11,7 +11,7 @@ import {
   TooManyAddressesError,
   MAX_ADDRESSES,
 } from "@/db/queries/customers";
-import { profileSchema, savedAddressSchema } from "@/lib/validation/account";
+import { profileSchema, savedAddressSchema } from "@ekmool/contracts/account";
 
 /**
  * Every action starts with requireAccount(), which resolves the customer

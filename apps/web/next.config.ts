@@ -95,6 +95,23 @@ const SECURITY_HEADERS = [
 
 const nextConfig: NextConfig = {
   /**
+   * The workspace packages ship TypeScript source rather than a built dist,
+   * so Next compiles them like the app's own files.
+   *
+   * That is the point. A compiled package is a black box to the bundler
+   * unless every sideEffects declaration is exactly right, and the script
+   * budget here has single-digit KB of headroom — a package boundary that
+   * quietly defeated tree-shaking would spend all of it. Source in, shaken
+   * the same way src/lib is. It also means there is no build step to order
+   * ahead of this one, and no published artefact that can go stale.
+   *
+   * @ekmool/core has no barrel export, deliberately: its `exports` map lists
+   * each entry point so importing formatPaise pulls in 23 lines rather than
+   * the whole package.
+   */
+  transpilePackages: ["@ekmool/core", "@ekmool/contracts", "@ekmool/tokens"],
+
+  /**
    * Standalone everywhere except Vercel.
    *
    * The Dockerfile serves `.next/standalone`, so this is required for the

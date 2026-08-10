@@ -1,8 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { previewCoupon, subtotalForItems } from "@/db/queries/coupons";
-import { couponRefusalMessage } from "@/lib/coupons";
-import { couponCodeSchema } from "@/lib/validation/checkout";
+import { couponRefusalMessage } from "@ekmool/core/coupons";
+import { couponCodeSchema } from "@ekmool/contracts/checkout";
 import { shippingFor } from "@/db/queries/orders";
 import { DbUnconfiguredError } from "@/db/pool";
 

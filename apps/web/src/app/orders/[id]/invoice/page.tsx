@@ -10,7 +10,7 @@ import {
   taxFromInclusive,
   shippingRateBps,
   formatRateBps,
-} from "@/lib/gst";
+} from "@ekmool/core/gst";
 import { PrintButton } from "@/components/account/PrintButton";
 
 export const dynamic = "force-dynamic";

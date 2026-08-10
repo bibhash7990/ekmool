@@ -1,56 +1,34 @@
 @import "tailwindcss";
-
 /*
-  EKMOOL design tokens — single source of truth.
+  EKMOOL design tokens — the palette, the type scale, the two shadows and
+  the easing curve. They are no longer written here: the single source is
+  packages/tokens/src/tokens.ts, and this stylesheet is one of its two
+  outputs (the other is the phone, which has no CSS to read). Change a
+  token there and run `pnpm --filter @ekmool/tokens emit`.
+
   Never hardcode brand hex in components; use the utilities these generate
   (bg-ek-paper, text-ek-green-900, border-ek-green-200, …).
+
+  @import has to come before any rule, so this sits directly under
+  Tailwind's own import; the @theme block it carries is inlined by
+  Tailwind before it resolves utilities, exactly as if it were written
+  below.
+*/
+@import "@ekmool/tokens/theme.css";
+
+/*
+  The two font stacks are the one part of the theme that stays here.
+  var(--font-marcellus) and var(--font-figtree) are defined by next/font
+  at build time in this app's root layout — outside it they resolve to
+  nothing, so a shared package exporting these stacks would be exporting a
+  dangling reference. The phone loads the same two families through
+  expo-font by name, which shares nothing with this string.
 */
 @theme {
-  /* ---- Brand palette (Section 2.2) ---- */
-  --color-ek-green-950: #10241b; /* deepest — dark section backgrounds */
-  --color-ek-green-900: #1c3a2d; /* PRIMARY INK — headings, header/footer, buttons */
-  --color-ek-green-700: #2c523f; /* hover states, secondary text on light */
-  --color-ek-green-200: #c9d8cd; /* borders, dividers on light */
-  /* Gold that is safe as INK, measured against every light surface we use:
-     4.75:1 on gold-100, 5.02:1 on cream, 5.38:1 on paper. gold-600 was
-     assumed readable and is not — it lands at 2.84:1 on paper, under even
-     the 3:1 large-text floor. Use gold-800 for any gold text or icon on a
-     light ground; keep 500/600 for fills, rules and use on dark green. */
-  --color-ek-gold-800: #8a5d0d;
-  --color-ek-gold-600: #c4881f; /* gold fills, hover fills, rules — not ink on light */
-  --color-ek-gold-500: #d99a2b; /* TURMERIC GOLD — CTAs, accents, the root motif */
-  --color-ek-gold-100: #f7e8cb; /* gold tint backgrounds, badges */
-  --color-ek-cream: #f5efe2; /* ink on dark backgrounds */
-  --color-ek-paper: #faf7f0; /* page background — never pure white */
-  --color-ek-terracotta: #b4572e; /* chilli product accent only */
-
   /* ---- Typography ---- */
   --font-display: var(--font-marcellus), Georgia, "Times New Roman", serif;
   --font-sans: var(--font-figtree), ui-sans-serif, system-ui, -apple-system,
     "Segoe UI", sans-serif;
-
-  /* Deliberate type scale: 15 / 17 / 20 / 26 / 34 / 46 / 64 */
-  --text-15: 0.9375rem;
-  --text-15--line-height: 1.55;
-  --text-17: 1.0625rem;
-  --text-17--line-height: 1.6;
-  --text-20: 1.25rem;
-  --text-20--line-height: 1.5;
-  --text-26: 1.625rem;
-  --text-26--line-height: 1.35;
-  --text-34: 2.125rem;
-  --text-34--line-height: 1.22;
-  --text-46: 2.875rem;
-  --text-46--line-height: 1.12;
-  --text-64: 4rem;
-  --text-64--line-height: 1.05;
-
-  /* ---- Shadows: nothing heavier than these two (Section 5) ---- */
-  --shadow-hairline: 0 1px 2px rgb(16 36 27 / 0.06);
-  --shadow-card: 0 1px 2px rgb(16 36 27 / 0.05), 0 8px 24px rgb(16 36 27 / 0.07);
-
-  /* ---- Motion ---- */
-  --ease-soft: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 @layer base {

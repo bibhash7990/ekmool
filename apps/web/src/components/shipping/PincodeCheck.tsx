@@ -4,7 +4,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { PinIcon, TruckIcon } from "@/components/icons";
 import { createLocalStore, useLocalStore } from "@/lib/local-store";
-import type { ServiceabilityResult } from "@/lib/serviceability";
+import type { ServiceabilityResult } from "@ekmool/core/serviceability";
 
 /**
  * "When will it get here?" — asked before the buy decision, not after.

@@ -3,7 +3,7 @@ import Link from "next/link";
 
 import { getCatalog, type Product } from "@/db/queries/products";
 import { getProductContent } from "@/content/products";
-import { searchCatalog, suggestCorrection } from "@/lib/search";
+import { searchCatalog, suggestCorrection } from "@ekmool/core/search";
 import { ProductCard } from "@/components/product/ProductCard";
 import { WishlistButton } from "@/components/wishlist/WishlistButton";
 import { SearchForm } from "@/components/search/SearchForm";

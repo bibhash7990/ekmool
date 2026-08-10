@@ -102,7 +102,7 @@ file that queries MySQL. They must move to `core`, and
 
 ```ts
 // apps/web/src/db/queries/products.ts
-import type { Product, ProductVariant, ProductImage } from "@ekmool/core";
+import type { Product, ProductVariant, ProductImage } from "@ekmool/core/catalog";
 export type { Product, ProductVariant, ProductImage };   // re-exported so
 // existing imports across ~30 components keep working unchanged
 ```
@@ -134,7 +134,7 @@ export interface CartStorage {
   read(): Promise<string | null>;
   write(value: string): Promise<void>;
 }
-export const CART_STORAGE_KEY = "ekmool.cart.v1";
+export const CART_STORAGE_KEY = "ekmool.cart.v2";
 export function createCartPersistence(storage: CartStorage) { /* … */ }
 ```
 
@@ -142,6 +142,17 @@ Web passes a `localStorage` adapter; mobile passes `expo-sqlite/kv-store`.
 The versioned key is shared, which matters for a reason worth writing in the
 comment: it means a future cart-shape migration is written once and both
 clients get it.
+
+**Read the key out of the running code, do not copy it from here.** An
+earlier draft of this document said `ekmool.cart.v1`. The web is on **v2**
+— v1 is the legacy key it still reads once, to migrate. Implementing the
+draft literally would have emptied the basket of every customer who had one,
+silently, with no error anywhere. It was caught during implementation by
+reading `cart-persistence.ts` rather than trusting the plan.
+
+The v1→v2 migration sweep stays in `apps/web`, not in `core`: it is a
+one-time fix-up for a key that never existed on a phone, and the ordering
+matters — the legacy key is removed only after a successful v2 write.
 
 **Do not try to sync carts between web and phone.** There is no account, so
 there is no key to sync them under, and inventing one would be inventing
@@ -285,7 +296,29 @@ The web app's behaviour must not change. The mechanics:
 
 ### The gate that matters
 
-`pnpm --filter web run audit`, and the numbers are **178 / 181 / 184 / 176 KB**.
+`pnpm --filter web run audit`. Two baselines, and using the wrong one wastes
+an afternoon:
+
+| Build | `/` | `/products` | `/products/[slug]` | `/blog/[slug]` |
+|---|---|---|---|---|
+| Historic, from the README | 178 | 181 | 184 | 176 |
+| **Keyless, as CI builds it** | **187** | **183** | **186** | **179** |
+| After this phase | 188 | 188 | 194 | 184 |
+
+The keyless row is the one to compare against, because CI configures no
+third party. Built with a developer's own `.env.local` the same pages read
+**381 / 373 / 376 / 369 KB** — that is Sentry, Clerk and PostHog, and it is
+not a regression however much it looks like one.
+
+The after-phase row is inside the ~9 KB band `docs/PERFORMANCE.md`
+documents, and every page stayed under budget.
+
+**Do not try to compare Turbopack chunk filenames across a refactor.**
+`PERFORMANCE.md` says a real regression adds a filename, and that is true
+within a build lineage — but the names are content hashes, so a refactor
+renames all of them. Compare the *shape* instead: the count per page and the
+size of the per-route chunk. After this phase: home 16 scripts, blog 15,
+product 17 with one extra 7.4 KB route chunk, which is what it had before.
 
 A package boundary is exactly the kind of change that can add bytes without
 adding code: a barrel `index.ts` that re-exports everything will pull the
@@ -308,9 +341,16 @@ total alone is noisy by about 9 KB and has already fooled this project once.
 - [ ] `pnpm turbo typecheck lint` clean across all five workspaces
 - [ ] `pnpm --filter @ekmool/core test` green, and running in CI's fast job
 - [ ] The full web suite matrix from Phase 0 green, sequentially
-- [ ] `pnpm --filter web run audit`: SEO 100, a11y 100, and the four script
-      totals within noise of 178 / 181 / 184 / 176 KB, **verified by chunk
-      list, not by total**
+- [ ] `pnpm --filter web run audit`: SEO 100, a11y 100, best practices 100,
+      CLS 0, and every page **under its script budget**, compared against
+      the keyless row of the table above
+- [ ] The Lighthouse **performance** score judged on CI, not on a developer
+      laptop. Two runs of the identical build here gave TBT of 820 and 310 ms
+      on `/`, and 280 and 780 ms on the product page — the worst page even
+      swapped. Script transfer was stable to the kilobyte across the same two
+      runs, which is why the budget is the local gate and the score is not.
+- [ ] `pnpm check:packages` green — no React in a shared package, no barrel
+      in `@ekmool/core`
 - [ ] No shared package resolves `react` — the grep check is in CI
 - [ ] No barrel export in `@ekmool/core`; `exports` map lists each entry
       point

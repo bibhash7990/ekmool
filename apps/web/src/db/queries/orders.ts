@@ -4,7 +4,7 @@ import type { PoolConnection, ResultSetHeader, RowDataPacket } from "mysql2/prom
 import { getPool } from "@/db/pool";
 import { upsertCustomerTx } from "@/db/queries/customers";
 import { claimCouponTx, recordRedemptionTx } from "@/db/queries/coupons";
-import { allocateDiscount, type CouponRefusal } from "@/lib/coupons";
+import { allocateDiscount, type CouponRefusal } from "@ekmool/core/coupons";
 import { timingSafeEquals } from "@/lib/crypto";
 import { sellerState } from "@/lib/env";
 import {
@@ -12,8 +12,8 @@ import {
   taxFromInclusive,
   financialYear,
   formatInvoiceNumber,
-} from "@/lib/gst";
-import type { CheckoutInput } from "@/lib/validation/checkout";
+} from "@ekmool/core/gst";
+import type { CheckoutInput } from "@ekmool/contracts/checkout";
 import {
   FLAT_SHIPPING_PAISE,
   FREE_SHIPPING_THRESHOLD_PAISE,
@@ -265,7 +265,7 @@ export async function createOrder(input: {
       // Prices include GST, so the tax comes out of this figure rather than
       // being added to it — and it comes out of the *discounted* figure,
       // because a discount recorded on the invoice reduces the transaction
-      // value under s.15(3)(a) of the CGST Act. See src/lib/gst.ts.
+      // value under s.15(3)(a) of the CGST Act. See @ekmool/core/gst.
       const tax = taxFromInclusive(
         line.lineTotalPaise - lineDiscount,
         line.variant.gst_rate_bps,

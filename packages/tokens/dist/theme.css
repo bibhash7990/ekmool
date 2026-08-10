@@ -1,0 +1,51 @@
+/*
+  GENERATED FILE — do not edit by hand.
+
+  Source:  packages/tokens/src/tokens.ts
+  Command: pnpm --filter @ekmool/tokens emit
+
+  Every value below, and the reasoning behind it — including the
+  measured contrast ratios that make gold-800 the only gold safe as
+  ink on a light ground — lives in the source file. Change it there
+  and re-run the command; `pnpm --filter @ekmool/tokens check` fails
+  if this file and that one disagree.
+
+  It is committed so the web build needs no code-generation step.
+*/
+@theme {
+  /* ---- Brand palette (Section 2.2) ---- */
+  --color-ek-green-950: #10241b;
+  --color-ek-green-900: #1c3a2d;
+  --color-ek-green-700: #2c523f;
+  --color-ek-green-200: #c9d8cd;
+  --color-ek-gold-800: #8a5d0d;
+  --color-ek-gold-600: #c4881f;
+  --color-ek-gold-500: #d99a2b;
+  --color-ek-gold-100: #f7e8cb;
+  --color-ek-cream: #f5efe2;
+  --color-ek-paper: #faf7f0;
+  --color-ek-terracotta: #b4572e;
+
+  /* ---- Type scale: 15 / 17 / 20 / 26 / 34 / 46 / 64. Nothing below 15. ---- */
+  --text-15: 0.9375rem;
+  --text-15--line-height: 1.55;
+  --text-17: 1.0625rem;
+  --text-17--line-height: 1.6;
+  --text-20: 1.25rem;
+  --text-20--line-height: 1.5;
+  --text-26: 1.625rem;
+  --text-26--line-height: 1.35;
+  --text-34: 2.125rem;
+  --text-34--line-height: 1.22;
+  --text-46: 2.875rem;
+  --text-46--line-height: 1.12;
+  --text-64: 4rem;
+  --text-64--line-height: 1.05;
+
+  /* ---- Shadows: nothing heavier than these two (Section 5) ---- */
+  --shadow-hairline: 0 1px 2px rgb(16 36 27 / 0.06);
+  --shadow-card: 0 1px 2px rgb(16 36 27 / 0.05), 0 8px 24px rgb(16 36 27 / 0.07);
+
+  /* ---- Motion ---- */
+  --ease-soft: cubic-bezier(0.22, 1, 0.36, 1);
+}

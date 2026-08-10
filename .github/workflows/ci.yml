@@ -41,6 +41,17 @@ jobs:
       - run: pnpm turbo typecheck
       - run: pnpm turbo lint
 
+      # Two properties nothing else enforces: no shared package imports
+      # React (two apps, two React versions, kept apart by pnpm's isolated
+      # store), and @ekmool/core has no barrel export (the script budget
+      # has single-digit KB of headroom). Both are greps; see the script.
+      - run: pnpm check:packages
+
+      # Pure arithmetic — GST, coupons, money, delivery bands — with no
+      # server and no database, so it belongs in the fast job rather than
+      # behind MySQL coming up.
+      - run: pnpm --filter @ekmool/core test
+
   # The real one: a MySQL, a Redis, a production build, and every suite
   # that talks to a running server.
   verify:

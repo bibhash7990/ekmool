@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/auth";
 import { revalidateCatalog } from "@/lib/revalidate";
-import { GST_RATE_OPTIONS } from "@/lib/gst";
+import { GST_RATE_OPTIONS } from "@ekmool/core/gst";
 import { recordAdminAction, diffFields } from "@/db/queries/audit";
 import {
   createProduct,

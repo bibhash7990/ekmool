@@ -142,7 +142,7 @@ We initiate every approved refund within 2 working days. The time after that is 
 
   "policy.shipping.times.heading": "Dispatch and delivery times",
   // Split around the zone table, which is NOT editable: it renders from
-  // lib/serviceability.ts, the same table the PIN code checker on a
+  // @ekmool/core/serviceability, the same table the PIN code checker on a
   // product page reads. A policy and a widget quoting different numbers is
   // how a shop ends up with a promise it did not know it had made.
   "policy.shipping.times.before": `Orders are packed and handed to the courier within one working day of confirmation. Orders placed on Sunday or a public holiday are packed the next working day.

@@ -5,8 +5,17 @@ magazine that happens to sell things — generous type, a lot of paper, one
 accent used sparingly, and photography that looks like somebody stood in a
 field.
 
-Everything below is a token in `apps/web/src/app/globals.css` under Tailwind v4's
-`@theme`. **A hardcoded hex in a component is a review failure.**
+Everything below is a token in **`packages/tokens/src/tokens.ts`**, which is
+the single source. A script emits `packages/tokens/dist/theme.css` — the
+Tailwind v4 `@theme` block that `apps/web/src/app/globals.css` imports — and
+the same object is read directly by React Native, which has no CSS.
+
+**A hardcoded hex in a component is a review failure**, on either client.
+
+One source because two would drift, and the drift is invisible: the gold
+trap below is specifically the mistake that does not look wrong. After
+changing a token run `pnpm --filter @ekmool/tokens emit`; CI runs the same
+script with `--check` and fails if the committed CSS is stale.
 
 ---
 
@@ -227,6 +236,10 @@ The voice is plain, specific and unhurried. It names things.
 
 ## Related
 
-`apps/web/src/app/globals.css` is the source of truth. `docs/PERFORMANCE.md` for what
-a client component costs · `docs/ARCHITECTURE.md` for the server/client
-boundary
+`packages/tokens/src/tokens.ts` is the source of truth for colour and type;
+`apps/web/src/app/globals.css` imports the emitted `@theme` and owns
+everything else — the base layer, the utilities, the font stacks (which
+resolve `next/font` variables and so cannot leave the app).
+`docs/PERFORMANCE.md` for what a client component costs ·
+`docs/ARCHITECTURE.md` for the server/client boundary ·
+`docs/mobile/phase-1-shared-packages.md` for why the tokens moved

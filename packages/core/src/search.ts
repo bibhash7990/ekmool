@@ -1,4 +1,4 @@
-import type { Product } from "@/db/queries/products";
+import type { Product } from "./catalog-types.ts";
 
 /**
  * Catalogue search.

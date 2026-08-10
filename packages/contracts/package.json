@@ -1,0 +1,19 @@
+{
+  "name": "@ekmool/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    "./checkout": "./src/checkout.ts",
+    "./account": "./src/account.ts",
+    "./errors": "./src/errors.ts",
+    "./responses": "./src/responses.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  }
+}

@@ -6,7 +6,7 @@ import {
   type Coupon,
   type CouponBenefit,
   type CouponRefusal,
-} from "@/lib/coupons";
+} from "@ekmool/core/coupons";
 
 /**
  * Coupon lookup, validation and claiming.

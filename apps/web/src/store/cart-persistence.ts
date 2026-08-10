@@ -1,5 +1,13 @@
 import { createListenerMiddleware, isAnyOf } from "@reduxjs/toolkit";
 import {
+  CART_STORAGE_KEY,
+  createCartPersistence,
+  parseCartItems,
+  parsePersistedCart,
+  type CartStorage,
+  type PersistedCart,
+} from "@ekmool/core/cart/persistence";
+import {
   cartCleared,
   cartHydrated,
   couponApplied,
@@ -11,58 +19,59 @@ import {
 } from "./cart-slice";
 
 /**
+ * The browser half of cart persistence. The key, the wire shape and the
+ * validation live in @ekmool/core/cart/persistence; what is left here is
+ * localStorage and the v1 migration, neither of which means anything off the
+ * web.
+ *
  * v2 stores `{ items, couponCode }`; v1 stored a bare array of items.
- * Both are read, so a cart left in a tab before this change survives —
+ * Both are read, so a cart left in a tab before that change survives —
  * silently emptying somebody's basket to simplify a migration is not a
  * trade worth making for two lines of code.
  */
-const STORAGE_KEY = "ekmool.cart.v2";
 const LEGACY_KEY = "ekmool.cart.v1";
 
-export interface PersistedCart {
-  items: CartItem[];
-  couponCode: string | null;
-}
+export type { PersistedCart };
 
-function parseItems(value: unknown): CartItem[] {
-  if (!Array.isArray(value)) return [];
-  return value.filter(
-    (i): i is CartItem =>
-      typeof i === "object" &&
-      i !== null &&
-      typeof (i as CartItem).variantId === "number" &&
-      typeof (i as CartItem).unitPricePaise === "number" &&
-      typeof (i as CartItem).qty === "number" &&
-      (i as CartItem).qty > 0 &&
-      typeof (i as CartItem).productSlug === "string" &&
-      typeof (i as CartItem).productName === "string",
-  );
-}
+/**
+ * The legacy sweep lives in `write`, not beside the read, so that it happens
+ * exactly when the v2 key has just been written successfully — the ordering
+ * the previous version had inside its try block. Sweeping on read instead
+ * would delete v1 before anything had replaced it.
+ */
+const localStorageCart: CartStorage = {
+  async read() {
+    return window.localStorage.getItem(CART_STORAGE_KEY);
+  },
+  async write(value) {
+    window.localStorage.setItem(CART_STORAGE_KEY, value);
+    // The v1 key would otherwise sit there for ever, and be read again by
+    // any older tab still running the previous bundle.
+    window.localStorage.removeItem(LEGACY_KEY);
+  },
+};
 
-/** Reads + validates the persisted cart. Safe on any garbage input. */
+const persistence = createCartPersistence(localStorageCart);
+
+/**
+ * Reads + validates the persisted cart. Safe on any garbage input.
+ *
+ * Synchronous, and not `persistence.read()`, on purpose. StoreProvider
+ * dispatches this from its mount effect; awaiting a promise there would push
+ * hydration into a later microtask and give the cart badge a frame in which
+ * it reads zero with items in the basket. The shared parser does the work
+ * either way — only the await is skipped.
+ */
 export function readPersistedCart(): PersistedCart {
   if (typeof window === "undefined") return { items: [], couponCode: null };
 
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed: unknown = JSON.parse(raw);
-      const record = (parsed ?? {}) as Record<string, unknown>;
-      const code = record.couponCode;
-      return {
-        items: parseItems(record.items),
-        // Re-validated on read: a hand-edited store must not put arbitrary
-        // text into a request body, and the code is re-quoted anyway.
-        couponCode:
-          typeof code === "string" && /^[A-Z0-9-]{3,40}$/.test(code)
-            ? code
-            : null,
-      };
-    }
+    const raw = window.localStorage.getItem(CART_STORAGE_KEY);
+    if (raw) return parsePersistedCart(raw);
 
     const legacy = window.localStorage.getItem(LEGACY_KEY);
     if (legacy) {
-      return { items: parseItems(JSON.parse(legacy)), couponCode: null };
+      return { items: parseCartItems(JSON.parse(legacy)), couponCode: null };
     }
   } catch {
     // Corrupt or blocked storage — start empty rather than throw.
@@ -86,22 +95,17 @@ cartListenerMiddleware.startListening({
   ),
   effect: (_action, api) => {
     if (typeof window === "undefined") return;
-    try {
-      const state = api.getState() as {
-        cart: { items: CartItem[]; couponCode: string | null };
-      };
-      window.localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({
-          items: state.cart.items,
-          couponCode: state.cart.couponCode,
-        }),
-      );
-      // The v1 key would otherwise sit there for ever, and be read again by
-      // any older tab still running the previous bundle.
-      window.localStorage.removeItem(LEGACY_KEY);
-    } catch {
-      // Storage full/blocked — cart still works in-memory.
-    }
+    const state = api.getState() as {
+      cart: { items: CartItem[]; couponCode: string | null };
+    };
+    void persistence
+      .write({
+        items: state.cart.items,
+        couponCode: state.cart.couponCode,
+      })
+      // Storage full/blocked — cart still works in-memory. Caught here rather
+      // than in core: an unhandled rejection would reach Sentry as an error
+      // on every keystroke in a private-mode tab.
+      .catch(() => {});
   },
 });

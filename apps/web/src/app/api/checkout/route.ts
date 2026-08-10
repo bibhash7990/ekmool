@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { checkoutSchema } from "@/lib/validation/checkout";
+import { checkoutSchema } from "@ekmool/contracts/checkout";
 import {
   createOrder,
   getOrderByIdempotencyKey,
@@ -8,7 +8,7 @@ import {
   UnknownVariantError,
   CouponRefusedError,
 } from "@/db/queries/orders";
-import { couponRefusalMessage } from "@/lib/coupons";
+import { couponRefusalMessage } from "@ekmool/core/coupons";
 import { createRazorpayOrder } from "@/lib/razorpay";
 import { buildOrderConfirmedEmail } from "@/emails/order-confirmed";
 import { sendAndLog } from "@/lib/mail";

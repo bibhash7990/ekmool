@@ -1,6 +1,23 @@
 import { unstable_cache } from "next/cache";
 import type { RowDataPacket } from "mysql2";
+import type {
+  Product,
+  ProductImage,
+  ProductVariant,
+} from "@ekmool/core/catalog";
 import { getPool } from "@/db/pool";
+
+/**
+ * The catalogue's shape now lives in @ekmool/core/catalog, because
+ * src/lib/search.ts wanted the type without wanting mysql2.
+ *
+ * Re-exported rather than left behind: around thirty components import
+ * `Product` from this module, and rewriting all thirty is thirty chances to
+ * introduce a typo in a change whose whole claim is that nothing changed.
+ * The query module is also still the honest place for a component to learn
+ * what the catalogue looks like — this is where it is built.
+ */
+export type { Product, ProductVariant, ProductImage };
 
 /**
  * Catalog reads. Every export is wrapped in unstable_cache with the
@@ -13,46 +30,6 @@ import { getPool } from "@/db/pool";
 
 export const PRODUCTS_TAG = "products";
 const REVALIDATE_SECONDS = 3600;
-
-export interface ProductVariant {
-  id: number;
-  sku: string;
-  packSizeLabel: string;
-  packSizeGrams: number;
-  pricePaise: number;
-  mrpPaise: number;
-  stockQty: number;
-  lowStockThreshold: number;
-}
-
-export interface ProductImage {
-  url: string;
-  altText: string;
-  isPrimary: boolean;
-}
-
-export interface Product {
-  id: number;
-  slug: string;
-  name: string;
-  originState: string;
-  giTagName: string;
-  shortDescription: string;
-  longDescription: string;
-  accent: "gold" | "terracotta" | "green";
-  /**
-   * Owner-supplied title tag and meta description, or null.
-   *
-   * Null is the normal case for the launch products: src/content/products.ts
-   * holds hand-written copy for those and is the better source. These exist
-   * for products created in the admin, which have no editorial entry and
-   * cannot get one without a deploy.
-   */
-  seoTitle: string | null;
-  seoDescription: string | null;
-  variants: ProductVariant[];
-  images: ProductImage[];
-}
 
 interface ProductRow extends RowDataPacket {
   id: number;

@@ -5,7 +5,7 @@ import {
   createProductAction,
   updateProductAction,
 } from "@/app/admin/catalog-actions";
-import { GST_RATE_OPTIONS } from "@/lib/gst";
+import { GST_RATE_OPTIONS } from "@ekmool/core/gst";
 import type { ActionResult } from "@/app/admin/actions";
 import type { AdminProduct } from "@/db/queries/catalog-admin";
 

@@ -113,11 +113,54 @@ export function getRedisSubscriber(): Redis | null {
   return globalThis.__ekmoolRedisSub;
 }
 
+/**
+ * Wait, briefly, for the socket to be usable.
+ *
+ * `lazyConnect` plus `enableOfflineQueue: false` means the very first
+ * command on a fresh process can lose a race with its own connection and
+ * reject outright — "Stream isn't writeable and enableOfflineQueue options
+ * is false", the same error getRedisSubscriber has a comment about.
+ *
+ * On a long-lived container that is one command at boot and nobody sees it.
+ * On Vercel every cold lambda is a fresh process, so it was the *first*
+ * rate-limit check on each one — measured on production, where /api/health
+ * reported redis "down" at uptime=1 and "up" on the same instance twelve
+ * seconds later, without exception. Each of those requests fell back to the
+ * per-instance bucket, quietly eroding the shared limit that is the entire
+ * reason for running Redis here.
+ *
+ * The wait is bounded below connectTimeout, so this does not weaken the
+ * fail-fast that enableOfflineQueue: false exists for: a Redis that is
+ * genuinely down still refuses inside two seconds and the caller still
+ * falls back. It only stops us abandoning a connection that was about to
+ * succeed.
+ */
+export async function whenReady(client: Redis, timeoutMs = 1_500): Promise<boolean> {
+  if (client.status === "ready") return true;
+  // "end" means ioredis has given up entirely; retryStrategy will not be
+  // reviving this one, so waiting cannot help.
+  if (client.status === "end") return false;
+
+  return new Promise<boolean>((resolve) => {
+    const done = (value: boolean) => {
+      clearTimeout(timer);
+      client.off("ready", onReady);
+      resolve(value);
+    };
+    const onReady = () => done(true);
+    const timer = setTimeout(() => done(false), timeoutMs);
+    // unref so a pending wait can never hold a process open on its own.
+    timer.unref?.();
+    client.once("ready", onReady);
+  });
+}
+
 /** For /api/health. Never throws, and never waits long. */
 export async function pingRedis(timeoutMs = 1_000): Promise<boolean> {
   const client = getRedis();
   if (!client) return false;
   try {
+    await whenReady(client);
     await Promise.race([
       client.ping(),
       new Promise((_, reject) =>

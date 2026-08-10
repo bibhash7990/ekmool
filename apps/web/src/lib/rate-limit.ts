@@ -1,5 +1,5 @@
 import type Redis from "ioredis";
-import { getRedis, hasRedis } from "@/lib/redis";
+import { getRedis, hasRedis, whenReady } from "@/lib/redis";
 
 /**
  * Token-bucket rate limiting, shared across instances when Redis is
@@ -170,6 +170,13 @@ export class RedisTokenBucket implements RateLimiter {
     windowMs: number,
   ): Promise<RateLimitResult> {
     try {
+      // A cold process would otherwise lose the race with its own
+      // connection and fall through to the in-memory bucket on its first
+      // request — which on Vercel is every cold lambda, and is exactly the
+      // limit Redis is here to share. Bounded, so a dead Redis still fails
+      // fast. See whenReady in src/lib/redis.ts.
+      await whenReady(this.#client);
+
       const [allowed, tokensText] = await this.#client.rateBucket!(
         `rl:${key}`,
         String(limit),

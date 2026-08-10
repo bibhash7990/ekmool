@@ -13,7 +13,60 @@
     "build": {
       "dependsOn": ["^build"],
       "outputs": [".next/**", "!.next/cache/**", "dist/**"],
-      "cache": false
+
+      // The web build reads MySQL to prerender product pages, so its output
+      // is not a pure function of the source. Caching it would serve a
+      // stale catalogue from a cache hit — the same class of bug that rule
+      // 9 and revalidateTag exist to prevent.
+      "cache": false,
+
+      // Turborepo 2 defaults envMode to "strict": a task sees only the
+      // variables declared here, and everything else in the environment is
+      // filtered out before the command runs.
+      //
+      // That is a good default and it broke the first Vercel deploy after
+      // the monorepo conversion. The DATABASE_* variables were set in the
+      // project and simply never reached `next build`, which failed
+      // prerendering / with DbUnconfiguredError — a message that reads like
+      // missing configuration rather than like a filter.
+      //
+      // The subtler one is VERCEL. next.config.ts branches on it to switch
+      // OFF `output: "standalone"`, so a build that cannot see it emits the
+      // wrong output shape for the platform it is being built for, and does
+      // so without erroring.
+      //
+      // Wildcards rather than a hand-kept list of forty names: every one of
+      // these prefixes is a family that grows, and a variable added to
+      // .env.example but forgotten here fails at build time on a deploy,
+      // which is the most expensive place to find it.
+      //
+      // Nothing here is a secret. This declares which names are visible to
+      // the build; the values stay in the environment, per SECURITY.md.
+      "env": [
+        "ADMIN_EMAIL",
+        "ANALYZE",
+        "CI",
+        "CLERK_SECRET_KEY",
+        "CRON_SECRET",
+        "DATABASE_*",
+        "GRIEVANCE_OFFICER_*",
+        "MAIL_FROM",
+        "NEXT_PUBLIC_*",
+        "NEXT_RUNTIME",
+        "NODE_ENV",
+        "PORT",
+        "RAZORPAY_*",
+        "REDIS_URL",
+        "REVALIDATE_SECRET",
+        "S3_*",
+        "SELLER_*",
+        "SENTRY_*",
+        "SESSION_SECRET",
+        "SMTP_*",
+        "TURNSTILE_SECRET_KEY",
+        "VERCEL",
+        "VERCEL_*"
+      ]
     },
     "test": {
       "dependsOn": ["^build"],

@@ -108,10 +108,26 @@ guessed.
 ### A purge is local to one process
 
 Next's cache lives in the process that holds it. On four replicas, an admin
-edit purges one. `src/lib/revalidate.ts` therefore announces the purge on a
-Redis channel and every instance applies it by calling its own
+edit purges one. `apps/web/src/lib/revalidate.ts` therefore announces the
+purge on a Redis channel and every instance applies it by calling its own
 `/api/revalidate?fanout=1` over loopback — a route handler, because
 `revalidateTag` needs a request store and a pub/sub callback has none.
+
+**This is a self-hosted mechanism, and it is off on Vercel.** Vercel's Data
+Cache is shared across instances and regions, so `revalidateTag` is already
+global there and the channel has nothing to fan out. Running it anyway
+would be worse than pointless: Vercel freezes a function between
+invocations, so the subscription is idle exactly when a message arrives and
+the purge is silently lost — a mechanism that looks alive and delivers
+nothing. `crossInstancePurgeNeeded` in `purge-channel.ts` gates both ends.
+
+So what `REDIS_URL` buys depends on where you run:
+
+| Deployment | Rate limiter | Purge channel |
+|---|---|---|
+| One container | in-memory is already correct | not needed — one cache |
+| `--scale app=4` | **shared, and required** | **required** |
+| Vercel | **shared, and required** | off — `revalidateTag` is global |
 
 ---
 

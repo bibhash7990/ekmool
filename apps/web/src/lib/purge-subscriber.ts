@@ -2,6 +2,7 @@ import "server-only";
 import { getRedisSubscriber, hasRedis } from "@/lib/redis";
 import {
   PURGE_CHANNEL,
+  crossInstancePurgeNeeded,
   instanceId,
   isPurgeMessage,
   type PurgeKind,
@@ -38,6 +39,9 @@ function selfUrl(kind: PurgeKind): string {
 
 export function startPurgeSubscriber(): void {
   if (!hasRedis) return;
+  // On Vercel revalidateTag is already global and a frozen function cannot
+  // receive on a subscription anyway. See crossInstancePurgeNeeded.
+  if (!crossInstancePurgeNeeded) return;
   if (globalThis.__ekmoolPurgeSubscribed) return;
 
   if (!revalidateSecret) {

@@ -30,7 +30,7 @@ Nothing here is urgent. Do them in the order that matches what you need next.
 | Background jobs | working |
 | **Installable PWA, offline browsing, offline COD orders** | working — no keys, no service |
 | **Nightly verified backups** | working — kept on disk; section 9 adds off-site |
-| Rate limiting | working, but **per-process**. Set `REDIS_URL` before running more than one replica, or four containers enforce four separate limits |
+| Rate limiting | working, but **per-process**. Set `REDIS_URL` before running more than one replica, or four containers enforce four separate limits. **Vercel is many instances**, so the 5/min on `/api/account/lookup` is really 5 per warm lambda until this is set |
 | Emails | composed and recorded in `email_log` as `skipped_no_smtp`, not delivered |
 
 To generate the local secrets (already done in your `apps/web/.env.local`):

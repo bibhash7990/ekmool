@@ -4,6 +4,7 @@ import { CONTENT_TAG } from "@/db/queries/content";
 import { REVIEWS_TAG } from "@/db/queries/reviews";
 import {
   PURGE_CHANNEL,
+  crossInstancePurgeNeeded,
   instanceId,
   type PurgeKind,
   type PurgeMessage,
@@ -106,6 +107,12 @@ export interface PurgeOptions {
  */
 function broadcast(kind: PurgeKind, options?: PurgeOptions): void {
   if (options?.broadcast === false) return;
+
+  // Nobody is listening on Vercel, and nobody needs to be: the Data Cache
+  // is shared, so the revalidateTag above was already global. Announcing
+  // anyway would spend a Redis command per admin edit to reach a
+  // subscriber that startPurgeSubscriber deliberately never started.
+  if (!crossInstancePurgeNeeded) return;
 
   // Imported lazily. This module is pulled into pages that must build with
   // no Redis and no ioredis resolution at all.

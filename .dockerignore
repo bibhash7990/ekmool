@@ -1,28 +1,48 @@
 # node_modules is reinstalled inside the image. Copying the host's would be
 # both enormous and wrong: this project is developed on Windows, so sharp's
 # platform binaries would be win32 rather than linux-musl.
+#
+# A pnpm workspace has one tree per member as well as the root store, and
+# these patterns are matched against the whole path, not the basename — so
+# the root entry alone would let apps/web/node_modules through, which is
+# exactly the copy that would poison the build with win32 sharp.
 node_modules
+apps/*/node_modules
+packages/*/node_modules
+
+# Build output. Same story: one per member plus the root.
 .next
+apps/*/.next
+packages/*/.next
 out
 build
 
+# Turborepo's local cache and logs. Hundreds of megabytes once warm, and
+# every byte of it invalidates the deps layer for nothing.
+.turbo
+apps/*/.turbo
+packages/*/.turbo
+
 # Secrets never enter an image layer. Compose injects them at runtime.
-.env
-.env.local
-.env.*.local
+# Globbed, because after the monorepo move there is a second one at
+# apps/web/.env.local — the file `next build` actually reads.
+**/.env
+**/.env.local
+**/.env.*.local
 
 .git
 .gitattributes
 .gitignore
 
-# Test and audit output, regenerated on demand.
+# Test and audit output, regenerated on demand. research/ stayed at the
+# repository root; the k6 fixtures moved down with the app.
 research/audits
 research/loadtest
-scripts/k6/data
+apps/web/scripts/k6/data
 
 # Documentation. Note this is deliberately NOT a *.md glob — the blog posts
-# are src/app/blog/*/page.mdx and must be copied, since they compile into
-# routes.
+# are apps/web/src/app/blog/*/page.mdx and must be copied, since they compile
+# into routes.
 docs
 README.md
 AGENTS.md
@@ -31,6 +51,7 @@ CLAUDE.md
 .vscode
 .idea
 npm-debug.log*
-*.tsbuildinfo
+pnpm-debug.log*
+**/*.tsbuildinfo
 .DS_Store
 Thumbs.db

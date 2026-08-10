@@ -73,7 +73,8 @@ The exceptions, and the test for one: is anything a snapshot of it?
 | `reviews`, `newsletter_subscribers` on erasure | Somebody's words, not a record anyone must keep |
 
 Orders are **anonymised** on erasure, never deleted: they are financial
-records with a statutory retention period. See `src/db/queries/privacy.ts`.
+records with a statutory retention period. See
+`apps/web/src/db/queries/privacy.ts`.
 
 ### 4. A slug is not a URL
 
@@ -116,7 +117,7 @@ one that did not, under exactly the load where it matters.
 
 ### 7. Migrations only move forward
 
-`src/db/migrations/NNN_name.sql`, applied in filename order and recorded in
+`apps/web/src/db/migrations/NNN_name.sql`, applied in filename order and recorded in
 `_migrations`. Re-running is a no-op. There are no down migrations — write
 a new file.
 
@@ -132,7 +133,7 @@ zone — UTC in the Docker image. A naive `DATE(created_at)` puts every order
 placed before 05:30 IST on the previous day, so "yesterday's revenue" is
 wrong by a slice.
 
-Use the `IST()` helper in `src/db/queries/reports.ts`. It shifts by the
+Use the `IST()` helper in `apps/web/src/db/queries/reports.ts`. It shifts by the
 *measured* session offset rather than assuming UTC, and does the arithmetic
 itself because `CONVERT_TZ` returns NULL when the named time-zone tables
 are absent — which the official MySQL image does not ship, so the failure
@@ -219,10 +220,10 @@ stack trace pointing here.
 ## Local commands
 
 ```bash
-npm run db:up        # MySQL container
-npm run db:migrate   # apply pending migrations
-npm run db:seed      # catalogue content
-npm run db:reset-stock
+pnpm --filter web db:up        # MySQL container
+pnpm --filter web db:migrate   # apply pending migrations
+pnpm --filter web db:seed      # catalogue content
+pnpm --filter web db:reset-stock
 ```
 
 Inspect:

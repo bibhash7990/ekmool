@@ -47,8 +47,8 @@ A reviewer sends a change back for any of these without discussion.
    there must never be one.
 8. **Browsing never touches the database.** `/`, `/products`,
    `/products/[slug]`, `/blog/*` and the policy pages are static and must
-   stay that way — `npm run chaos` asserts they serve 200s with MySQL
-   stopped.
+   stay that way — `pnpm --filter web chaos` asserts they serve 200s with
+   MySQL stopped.
 9. **Never `revalidatePath` a product route.** Use
    `revalidateTag(PRODUCTS_TAG)`. A path purge 404'd all five product pages
    permanently in production once, with the database perfectly healthy.
@@ -64,19 +64,25 @@ A reviewer sends a change back for any of these without discussion.
 
 ## Shape
 
+A pnpm + Turborepo workspace. The application lives in `apps/web/`; every
+`src/…` path below is relative to it.
+
 ```
-src/app/           routes only — pages, layouts, route handlers, server actions
-src/components/    UI, server components by default
-src/db/queries/    the ONLY place SQL is written
-src/db/migrations/ forward-only, numbered .sql
-src/lib/           money, gst, coupons, search, session, redis, storage, csv
-src/content/       editorial copy in TypeScript
-src/store/         Redux Toolkit — the client cart, nothing else
+apps/web/          the Next.js application (was the repo root)
+  src/app/         routes only — pages, layouts, route handlers, server actions
+  src/components/  UI, server components by default
+  src/db/queries/  the ONLY place SQL is written
+  src/db/migrations/ forward-only, numbered .sql
+  src/lib/         money, gst, coupons, search, session, redis, storage, csv
+  src/content/     editorial copy in TypeScript
+  src/store/       Redux Toolkit — the client cart, nothing else
+packages/          shared workspace packages — empty until Phase 1
+docs/ research/    repository-wide, at the root
 ```
 
 - Server modules import `"server-only"`. Client components read only
   `NEXT_PUBLIC_*`.
-- `src/lib/env.ts` is the only server-side reader of `process.env`;
+- `apps/web/src/lib/env.ts` is the only server-side reader of `process.env`;
   capability flags are computed there once.
 - Server actions and route handlers validate with Zod, then call a query
   function. They do not write SQL.
@@ -103,9 +109,9 @@ removed?**
 ## Before saying a change is done
 
 ```bash
-npm run typecheck && npm run lint
-npm run test:<area>        # the suite covering what you touched
-npm run audit              # SEO 100, a11y 100, script budget
+pnpm turbo typecheck && pnpm turbo lint
+pnpm --filter web test:<area>   # the suite covering what you touched
+pnpm --filter web audit         # SEO 100, a11y 100, script budget
 ```
 
 Budget: 190 KB of script per page, 200 KB on the product page. Currently

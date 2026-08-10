@@ -6,16 +6,19 @@
 # _migrations table, and db-seed upserts on natural keys and never
 # overwrites stock, so re-running against a live shop cannot destroy
 # inventory.
+#
+# The working directory is the workspace root (/app), so both scripts are
+# addressed through pnpm's filter rather than run directly.
 set -eu
 
 echo "==> Migrating ${DATABASE_NAME:-ekmool} at ${DATABASE_HOST:-unset}"
-npm run db:migrate
+pnpm --filter web db:migrate
 
 if [ "${SKIP_SEED:-0}" = "1" ]; then
   echo "==> SKIP_SEED=1, leaving catalogue content alone"
 else
   echo "==> Seeding catalogue"
-  npm run db:seed
+  pnpm --filter web db:seed
 fi
 
 echo "==> Database ready"

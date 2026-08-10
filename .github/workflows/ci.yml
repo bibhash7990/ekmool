@@ -26,14 +26,20 @@ jobs:
     name: Types and lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      # pnpm/action-setup must run before setup-node: `cache: pnpm` resolves
+      # the store path by calling pnpm, and finds nothing if pnpm is not on
+      # PATH yet. Swapping these two lines costs the dependency cache
+      # silently — the run still passes, it just installs from scratch.
+      - uses: pnpm/action-setup@v4
+        with: { version: 11.5.1 }
+      - uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-      - run: npm ci
-      - run: npm run typecheck
-      - run: npm run lint
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo typecheck
+      - run: pnpm turbo lint
 
   # The real one: a MySQL, a Redis, a production build, and every suite
   # that talks to a running server.
@@ -89,27 +95,33 @@ jobs:
       PORT: "3100"
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with: { version: 11.5.1 }
+      - uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: npm
+          cache: pnpm
 
-      - run: npm ci
+      - run: pnpm install --frozen-lockfile
 
       - name: Schema and catalogue
         run: |
-          npm run db:migrate
-          npm run db:seed
+          pnpm --filter web db:migrate
+          pnpm --filter web db:seed
 
       - name: Build
         run: |
-          npm run build
-          npm run standalone
+          pnpm --filter web build
+          pnpm --filter web standalone
 
+      # `standalone:start` rather than a literal path: with
+      # outputFileTracingRoot at the workspace root the entry point is
+      # apps/web/.next/standalone/apps/web/server.js, and that path is
+      # already spelled once in apps/web/package.json. Two copies drift.
       - name: Start the server
         run: |
-          node .next/standalone/server.js > server.log 2>&1 &
+          pnpm --filter web standalone:start > server.log 2>&1 &
           for i in $(seq 1 60); do
             if curl -sf http://localhost:3100/api/health > /dev/null; then
               echo "up after ${i}s"
@@ -130,42 +142,44 @@ jobs:
       # Sequential, and each on its own line so a failure names itself in
       # the job summary. They are not parallel-safe: several drive checkout
       # through the same rate limiter, and running them together produces
-      # 429s that look like failures and are not.
+      # 429s that look like failures and are not. That is why they are run
+      # as `pnpm --filter web <suite>` and not through Turbo — a task graph
+      # would parallelise them — and why they must not become a matrix.
       - name: Structured data
-        run: npm run validate:schema
+        run: pnpm --filter web validate:schema
 
       - name: Admin
-        run: npm run test:admin
+        run: pnpm --filter web test:admin
 
       # Runs early, and before anything that publishes a review: its
       # empty-state check only means something while the reviews table is
       # still empty, and it says so rather than failing if it is not.
       - name: Home page
-        run: npm run test:home 3100
+        run: pnpm --filter web test:home 3100
 
       - name: Checkout
-        run: npm run test:checkout 3100
+        run: pnpm --filter web test:checkout 3100
 
       - name: Account
-        run: npm run test:account 3100
+        run: pnpm --filter web test:account 3100
 
       - name: Commerce
-        run: npm run test:commerce 3100
+        run: pnpm --filter web test:commerce 3100
 
       - name: Consent and security headers
-        run: npm run test:consent 3100
+        run: pnpm --filter web test:consent 3100
 
       - name: Discovery
-        run: npm run test:discovery 3100
+        run: pnpm --filter web test:discovery 3100
 
       - name: Promotions
-        run: npm run test:promotions 3100
+        run: pnpm --filter web test:promotions 3100
 
       - name: Jobs
-        run: npm run test:jobs 3100
+        run: pnpm --filter web test:jobs 3100
 
       - name: Offline and PWA
-        run: npm run test:offline 3100
+        run: pnpm --filter web test:offline 3100
 
       - name: Server log
         if: failure()
@@ -206,25 +220,27 @@ jobs:
       PORT: "3100"
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with: { version: 11.5.1 }
+      - uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: npm
+          cache: pnpm
 
-      - run: npm ci
-
-      - run: |
-          npm run db:migrate
-          npm run db:seed
+      - run: pnpm install --frozen-lockfile
 
       - run: |
-          npm run build
-          npm run standalone
+          pnpm --filter web db:migrate
+          pnpm --filter web db:seed
+
+      - run: |
+          pnpm --filter web build
+          pnpm --filter web standalone
 
       - name: Start the server
         run: |
-          node .next/standalone/server.js > server.log 2>&1 &
+          pnpm --filter web standalone:start > server.log 2>&1 &
           for i in $(seq 1 60); do
             if curl -sf http://localhost:3100/api/health > /dev/null; then exit 0; fi
             sleep 1
@@ -237,11 +253,21 @@ jobs:
       # headroom. A generous budget catches nothing, which is the only
       # thing a budget is for.
       - name: Scores and script budget
-        run: npm run audit 3100
+        # `run` is not optional here. `pnpm audit` is a built-in command —
+        # the vulnerability scanner — and it shadows a script of the same
+        # name, so `pnpm --filter web audit 3100` fails with
+        # ERR_PNPM_AUDIT_UNKNOWN_SUBCOMMAND and never reaches Lighthouse.
+        # Every other script in this file has a name pnpm does not claim.
+        run: pnpm --filter web run audit 3100
 
       # The raw reports, so a budget failure can be read rather than
-      # guessed at — which request grew, and by how much.
-      - uses: actions/upload-artifact@v4
+      # guessed at — which request grew, and by how much. research/ stayed
+      # at the repo root in the monorepo move, and scripts/audit.mjs writes
+      # there rather than under apps/web, so this path is unchanged.
+      # v6, not v5: upload-artifact@v5 still declares `using: node20` and
+      # would keep the deprecation warning it was bumped to remove. checkout
+      # and setup-node reach node24 at v5, which is why they differ here.
+      - uses: actions/upload-artifact@v6
         if: always()
         with:
           name: lighthouse-reports

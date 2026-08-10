@@ -83,7 +83,10 @@ export default function () {
 
 export function handleSummary(data) {
   return {
-    "research/loadtest/webhook-storm.json": JSON.stringify(data, null, 2),
+    // Relative to k6's working directory, which scripts/loadtest.mjs pins to
+    // apps/web; research/ stayed at the repository root in the monorepo
+    // move, so this climbs back out to reach it.
+    "../../research/loadtest/webhook-storm.json": JSON.stringify(data, null, 2),
     stdout: summarise(data),
   };
 }

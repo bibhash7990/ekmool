@@ -3,7 +3,11 @@
 The site is built so that **none of these are required**. With only a database
 and the two local secrets, you can run it, browse it, and take Cash on Delivery
 orders end to end. Every service below is additive: paste its keys into
-`.env.local`, restart, and that feature switches itself on.
+`apps/web/.env.local`, restart, and that feature switches itself on.
+
+That file is the app's own env file — `next dev` and `next build` read
+`.env.local` from `apps/web/`, while the `.env.example` template it is copied
+from stays at the repository root.
 
 Nothing here is urgent. Do them in the order that matches what you need next.
 
@@ -22,14 +26,14 @@ Nothing here is urgent. Do them in the order that matches what you need next.
 | **Customer account** — orders, profile, saved addresses | working — `/account`, same session, no Clerk |
 | **Invoices, returns, re-order** | working — invoices print pro-forma until section 6 is filled in |
 | **Admin: products, packs, prices, stock, coupons, reviews, returns, reports** | working — but the admin itself needs Clerk, section 3 |
-| Admin photograph *upload* | needs section 9; without it, attach a path under `public/images/` |
+| Admin photograph *upload* | needs section 9; without it, attach a path under `apps/web/public/images/` |
 | Background jobs | working |
 | **Installable PWA, offline browsing, offline COD orders** | working — no keys, no service |
 | **Nightly verified backups** | working — kept on disk; section 9 adds off-site |
 | Rate limiting | working, but **per-process**. Set `REDIS_URL` before running more than one replica, or four containers enforce four separate limits |
 | Emails | composed and recorded in `email_log` as `skipped_no_smtp`, not delivered |
 
-To generate the local secrets (already done in your `.env.local`):
+To generate the local secrets (already done in your `apps/web/.env.local`):
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
@@ -57,7 +61,7 @@ missing piece that a real customer would notice.
 1. Sign up at <https://www.brevo.com> (free tier).
 2. Go to **SMTP & API → SMTP**.
 3. Copy the **SMTP login** and **SMTP key** (the key is shown once).
-4. Fill in `.env.local`:
+4. Fill in `apps/web/.env.local`:
 
 ```
 SMTP_HOST=smtp-relay.brevo.com
@@ -101,7 +105,7 @@ wallets). Until then checkout offers Cash on Delivery only, with a quiet
    - URL: `https://yourdomain.com/api/payment/webhook`
    - Active events: `payment.captured`, `payment.failed`, `order.paid`
    - Set a **secret** and copy it.
-4. Fill in `.env.local`:
+4. Fill in `apps/web/.env.local`:
 
 ```
 NEXT_PUBLIC_RAZORPAY_KEY_ID=rzp_test_xxxxxxxxxxxx
@@ -115,7 +119,7 @@ URL as the webhook target.
 
 **Test card:** `4111 1111 1111 1111`, any future expiry, any CVV.
 
-**Verify:** `npm run test:checkout` exercises the webhook signature path
+**Verify:** `pnpm --filter web test:checkout` exercises the webhook signature path
 automatically once `RAZORPAY_WEBHOOK_SECRET` is set — including that a replayed
 webhook is a no-op.
 
@@ -198,7 +202,7 @@ Without a DSN, Sentry never initialises and ships no JavaScript at all.
 `add_to_cart`, `begin_checkout`, `purchase_completed`, `payment_failed`).
 
 1. Sign up at <https://posthog.com> (US cloud — the `/ingest` proxy in
-   `next.config.ts` points at `us.i.posthog.com`; change both rewrite
+   `apps/web/next.config.ts` points at `us.i.posthog.com`; change both rewrite
    destinations to `eu.i.posthog.com` if you pick the EU region).
 2. **Project Settings → Project API Key**:
 
@@ -333,8 +337,9 @@ but **it is still a gap**. Fill it in.
 shop serving images to the public.
 
 Without it the admin still manages photographs — it just cannot accept a
-file. You add the image under `public/images/products/` in the repository
-and give its path, which is exactly how the five launch products work. The
+file. You add the image under `apps/web/public/images/products/` in the
+repository and give its path, which is exactly how the five launch products
+work. The
 file picker appears only once storage is configured; an upload control that
 fails when used would be worse than one that is honestly absent.
 
@@ -362,7 +367,7 @@ All five or none — a partial set counts as unconfigured.
 
 **No SDK was added for this.** `@aws-sdk/client-s3` plus the presigner is
 around forty packages to produce one signed URL, and the signature is a
-documented HMAC chain that `node:crypto` already has. `src/lib/storage.ts`
+documented HMAC chain that `node:crypto` already has. `apps/web/src/lib/storage.ts`
 implements Signature Version 4 in about a hundred lines. Any S3-compatible
 endpoint that accepts path-style addressing will work — MinIO and Backblaze
 B2 both do, and so does AWS S3 itself.
@@ -379,8 +384,8 @@ JPEG cannot be used to upload an HTML page.
 
 ## Where the values go
 
-- **Local development:** `.env.local` (git-ignored). `.env.example` is the
-  committed template listing every variable.
+- **Local development:** `apps/web/.env.local` (git-ignored). The root
+  `.env.example` is the committed template listing every variable.
 - **Vercel:** Project → Settings → Environment Variables. Anything starting
   `NEXT_PUBLIC_` is baked into the client bundle at build time, so a change
   needs a redeploy.

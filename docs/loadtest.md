@@ -1,8 +1,8 @@
 # Load and failure testing — M7
 
-Measured 2026-08-04 against the **standalone production bundle**
-(`npm run build && npm run standalone && npm run standalone:start`), the same
-artifact a VPS deploy runs. k6 v2.1.0, MySQL 8.4 in Docker.
+Measured 2026-08-04 against the **standalone production bundle** (`build`,
+then `standalone`, then `standalone:start`, each under `pnpm --filter web`),
+the same artifact a VPS deploy runs. k6 v2.1.0, MySQL 8.4 in Docker.
 
 Hardware: one Windows laptop, 12 logical cores. **The load generator runs on
 the same machine as the server it is measuring**, so absolute latencies
@@ -11,14 +11,15 @@ the numbers are good for is the shape of the curve, the error rates, and the
 database invariants — all of which are hardware-independent.
 
 ```bash
-npm run loadtest
+pnpm --filter web loadtest
 ```
 
 ```bash
-npm run chaos
+pnpm --filter web chaos
 ```
 
-Reports land in `research/loadtest/`.
+Reports land in `research/loadtest/`, at the repository root — `research/`
+did not move when the application did.
 
 ---
 
@@ -33,7 +34,7 @@ think time:
     10,000 users / 20 s = 500 requests per second
 
 So 500 rps of public page traffic is the number the origin has to sustain,
-and it is what `scripts/k6/browse-10k.js` drives by default.
+and it is what `apps/web/scripts/k6/browse-10k.js` drives by default.
 
 ### Results — one origin process
 
@@ -64,9 +65,9 @@ table above was measured on an otherwise-idle laptop. Repeating it later with
 a browser open, the same server could not sustain 500 rps at all (478 rps
 actual, p95 1259 ms) while 400 rps stayed clean at p95 67 ms. **The error rate
 was 0.000% in every one of those runs** — saturation here shows up as latency,
-never as failure. That is why `npm run loadtest` gates the browse phase at
-400 rps: it is inside the knee on a working machine, so the suite stays
-trustworthy. 500 rps is a measurement, not a gate.
+never as failure. That is why `pnpm --filter web loadtest` gates the browse
+phase at 400 rps: it is inside the knee on a working machine, so the suite
+stays trustworthy. 500 rps is a measurement, not a gate.
 
 The bottleneck is CPU, not sockets. k6 reports `http_req_connecting` at 0.0 ms
 p95 and TIME_WAIT stayed at 9 sockets, so this is not port exhaustion; the
@@ -166,11 +167,11 @@ This phase needs Razorpay configured, and `NEXT_PUBLIC_RAZORPAY_KEY_ID` is
 inlined at build time, so it needs its own build:
 
 ```bash
-NEXT_PUBLIC_RAZORPAY_KEY_ID=rzp_test_x RAZORPAY_KEY_SECRET=s RAZORPAY_WEBHOOK_SECRET=w npm run build
+NEXT_PUBLIC_RAZORPAY_KEY_ID=rzp_test_x RAZORPAY_KEY_SECRET=s RAZORPAY_WEBHOOK_SECRET=w pnpm --filter web build
 ```
 
 ```bash
-PHASES=webhook RAZORPAY_WEBHOOK_SECRET=w npm run loadtest
+PHASES=webhook RAZORPAY_WEBHOOK_SECRET=w pnpm --filter web loadtest
 ```
 
 Without it the phase skips loudly rather than passing silently. Note that
@@ -230,15 +231,15 @@ stopped, but it runs well inside the one-hour ISR window, so pages come from
 the build-time cache and no revalidation is ever triggered. The gap was that
 nothing exercised *revalidation* as opposed to *rendering*.
 
-`scripts/chaos.mjs` now forces a revalidation on demand — same code path, no
-waiting an hour — and asserts all five product pages still return 200, both
+`apps/web/scripts/chaos.mjs` now forces a revalidation on demand — same code
+path, no waiting an hour — and asserts all five product pages still return 200, both
 during a database outage and after it clears.
 
 ---
 
 ## 5. Chaos — MySQL dies under live traffic
 
-`scripts/test-db-down.mjs` covers the static case: stop the database, then
+`apps/web/scripts/test-db-down.mjs` covers the static case: stop the database, then
 browse. This covers the harder one, where it disappears mid-flight with
 requests already in progress. **15 checks, all passing** — including the
 forced-revalidation regression described above.

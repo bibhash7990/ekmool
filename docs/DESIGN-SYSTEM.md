@@ -5,7 +5,7 @@ magazine that happens to sell things — generous type, a lot of paper, one
 accent used sparingly, and photography that looks like somebody stood in a
 field.
 
-Everything below is a token in `src/app/globals.css` under Tailwind v4's
+Everything below is a token in `apps/web/src/app/globals.css` under Tailwind v4's
 `@theme`. **A hardcoded hex in a component is a review failure.**
 
 ---
@@ -108,8 +108,8 @@ it is present is a page that looks wrong on launch day.
 
 ## Components
 
-`src/components/ui/` is the primitive layer. Reach for it before writing a
-div.
+`apps/web/src/components/ui/` is the primitive layer. Reach for it before
+writing a div.
 
 | Component | Notes |
 |---|---|
@@ -220,12 +220,13 @@ The voice is plain, specific and unhurried. It names things.
 7. Server component unless it genuinely needs the browser.
 8. `export const metadata` with a title and description; `robots: { index:
    false }` on anything private.
-9. Run `npm run audit` and `npm run validate:schema` before opening the PR.
+9. Run `pnpm --filter web run audit` and `pnpm --filter web validate:schema`
+   before opening the PR.
 
 ---
 
 ## Related
 
-`src/app/globals.css` is the source of truth. `docs/PERFORMANCE.md` for what
+`apps/web/src/app/globals.css` is the source of truth. `docs/PERFORMANCE.md` for what
 a client component costs · `docs/ARCHITECTURE.md` for the server/client
 boundary

@@ -1,0 +1,29 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // Only what is specific to this app lives here. Everything else —
+    // target, lib, strict, module resolution, allowImportingTsExtensions,
+    // jsx, incremental — comes from tsconfig.base.json and must not be
+    // restated: a duplicated option here silently wins over the base, so a
+    // later edit to the shared config would appear to do nothing.
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    // Relative to this file, not to the base config, which is why the alias
+    // cannot move up: apps/mobile will need its own "@/*" pointing elsewhere.
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts",
+    "**/*.mts"
+  ],
+  "exclude": ["node_modules"]
+}

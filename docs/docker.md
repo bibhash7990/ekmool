@@ -4,16 +4,19 @@ One command brings up everything — database, schema, catalogue content, the
 site build, the web server, and the cron scheduler.
 
 ```bash
-cp .env.example .env.local
+cp .env.example apps/web/.env.local
 ```
 
 ```bash
 docker compose up -d --build
 ```
 
+Run both from the repository root: the compose file and `.env.example` live
+there, and the application they configure lives in `apps/web`.
+
 The site is on **http://localhost:3000**. First run takes two to three
-minutes, almost all of it `npm ci` and `next build`; afterwards it is about
-twenty seconds.
+minutes, almost all of it `pnpm install` and `next build`; afterwards it is
+about twenty seconds.
 
 Add the reverse proxy — worth it for anything public-facing, see
 [The edge profile](#the-edge-profile):
@@ -50,7 +53,7 @@ to MySQL 8.4 at all — `docker/backup.sh` records the measurement.
 For a staging copy of the same stack on its own ports and volumes:
 
 ```bash
-npm run docker:staging
+pnpm --filter web docker:staging
 ```
 
 Each waits for the one before it — `service_healthy` for MySQL,
@@ -82,10 +85,14 @@ what you want, and it costs about fifteen seconds.
 
 ## Configuration
 
-Compose reads `.env` then `.env.local`, later winning — the same precedence
-Next applies, so a value behaves identically under `npm run dev` and in a
-container. Three settings are overridden per service because the network
-address differs inside:
+Compose reads `.env`, then `.env.local`, then `apps/web/.env.local`, later
+winning — the same precedence Next applies, so a value behaves identically
+under `pnpm dev` and in a container. Three paths rather than two because
+`next dev` and `next build` read `.env.local` from the app directory, so
+`apps/web/.env.local` is the file a developer actually has; the root pair is
+still read first, because a server deploy writes `.env` at the root. Three
+settings are overridden per service because the network address differs
+inside:
 
 | Setting | Host | Container |
 |---|---|---|
@@ -97,7 +104,7 @@ the sitemap, and email links are built from, so it must not be changed to an
 internal address.
 
 > **One caveat.** Compose expands `${VAR}` in `docker-compose.yml` from your
-> shell and from `.env` — **never** from `.env.local`. That only affects the
+> shell and from `.env` — **never** from either `.env.local`. That only affects the
 > `mysql` service, which needs its credentials when it first initialises. If
 > you change `DATABASE_USER` or `DATABASE_PASSWORD`, put them in `.env` too,
 > or MySQL will initialise with one password while the app connects with
@@ -180,14 +187,17 @@ Start over completely, discarding the database:
 docker compose down -v
 ```
 
-There are npm aliases for these: `docker:up`, `docker:edge`, `docker:down`,
-`docker:reset`, `docker:logs`, `docker:ps`.
+There are script aliases for these in the web package, run as
+`pnpm --filter web docker:up` — and `docker:edge`, `docker:down`,
+`docker:reset`, `docker:logs`, `docker:ps` the same way. They shell out to
+`docker compose`, which walks up from `apps/web` and finds the compose file
+at the root.
 
 MySQL's port is published to the host so the test suites still work against
 the containerised stack:
 
 ```bash
-npm run test:checkout 3000
+pnpm --filter web test:checkout 3000
 ```
 
 ---

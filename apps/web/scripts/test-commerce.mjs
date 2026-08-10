@@ -63,10 +63,13 @@ async function waitForHealth(url, timeoutMs = 60_000) {
 }
 
 async function startRegisteredServer() {
-  const entry = ".next/standalone/server.js";
+  // apps/web, not the repository root: outputFileTracingRoot points file
+  // tracing at the workspace, so the standalone tree carries the hoisted
+  // node_modules at its top and the server one level down under apps/web.
+  const entry = ".next/standalone/apps/web/server.js";
   if (!existsSync(entry)) {
     throw new Error(
-      `${entry} is missing — run \`npm run build && npm run standalone\` first.`,
+      `${entry} is missing — run \`pnpm --filter web build && pnpm --filter web standalone\` first.`,
     );
   }
 

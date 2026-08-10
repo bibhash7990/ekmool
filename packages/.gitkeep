@@ -1,0 +1,8 @@
+# Shared workspace packages land here in Phase 1:
+#   @ekmool/core       money, gst, coupons, serviceability, order status,
+#                      catalogue search, catalogue types, the cart slice
+#   @ekmool/contracts  Zod schemas, response DTOs, the error-code union
+#   @ekmool/tokens     one source for colour and type, emitted as both a
+#                      CSS @theme block and a typed object
+#
+# See docs/mobile/phase-1-shared-packages.md.

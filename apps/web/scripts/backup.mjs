@@ -47,12 +47,33 @@ import {
   statSync,
   unlinkSync,
 } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { loadEnv } from "./load-env.mts";
 
 loadEnv();
 
-const BACKUP_DIR = process.env.BACKUP_DIR ?? join(process.cwd(), "backups");
+/**
+ * `backups/` at the repository root, not under apps/web, and a *relative*
+ * BACKUP_DIR is resolved from there too rather than from cwd.
+ *
+ * Docker sets an absolute `BACKUP_DIR=/backups` (docker-compose.yml, and the
+ * path docs/deploy.md documents), which this leaves untouched. The relative
+ * form is the VPS/PM2 case — `.env.example` ships `BACKUP_DIR=./backups` —
+ * where the directory already exists at the repo root with up to
+ * BACKUP_KEEP_DAYS of archives in it. Reading `./backups` against the new
+ * cwd would quietly start a second, empty archive set under apps/web and
+ * abandon the first: prune() and uploadPending() only ever look in
+ * BACKUP_DIR, so the existing dumps would stop being uploaded and stop being
+ * pruned, with nothing to say so. You would find out on the day you needed
+ * them.
+ *
+ * import.meta.dirname rather than process.cwd() for the base, because
+ * `pnpm --filter web backup` runs in apps/web, a cron entry and
+ * cron-runner.mts's 04:00 upload may run from anywhere, and every one of
+ * them has to mean the same directory.
+ */
+const REPO_ROOT = join(import.meta.dirname, "..", "..", "..");
+const BACKUP_DIR = resolve(REPO_ROOT, process.env.BACKUP_DIR ?? "backups");
 const KEEP_DAYS = Math.max(1, Number(process.env.BACKUP_KEEP_DAYS ?? 14));
 
 const DB = {

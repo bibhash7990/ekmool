@@ -12,7 +12,7 @@ are not ceremony; each one is here because the alternative has a name.
   placeholder GSTIN is one bad merge from a fabricated tax document.
 - `.env*` is git-ignored except `.env.example`, which lists every variable
   with an empty value and a comment on what it unlocks.
-- `src/lib/env.ts` is the only server-side reader of `process.env`, and it
+- `apps/web/src/lib/env.ts` is the only server-side reader of `process.env`, and it
   validates: a Razorpay key must start `rzp_`, a GSTIN must match the
   15-character format, a Sentry DSN must be an `https://` URL. A value that
   looks like `changeme` or `your-key-here` counts as **absent**.
@@ -77,7 +77,7 @@ wrong reference produce **the same message**. A different one is an oracle.
 | everything else under `/api` | 60/min |
 | `/api/health`, `/api/payment/webhook` | exempt — uptime probes and Razorpay retries must never be throttled |
 
-Applied in `src/proxy.ts`. **Buckets are per-process without Redis** — set
+Applied in `apps/web/src/proxy.ts`. **Buckets are per-process without Redis** — set
 `REDIS_URL` before running more than one replica, or four containers enforce
 four separate limits.
 
@@ -101,7 +101,7 @@ subscribe somebody else.
 
 ## Headers
 
-`next.config.ts` sets CSP, HSTS (2 years, preload), `X-Frame-Options`,
+`apps/web/next.config.ts` sets CSP, HSTS (2 years, preload), `X-Frame-Options`,
 `X-Content-Type-Options`, `Referrer-Policy` and `Permissions-Policy`.
 
 **There is no CSP nonce, deliberately.** A per-request nonce forces every
@@ -137,8 +137,9 @@ Every CSV cell is guarded against **formula injection**. A value beginning
 `=`, `+`, `-`, `@`, tab or CR is executed on open by Excel, LibreOffice and
 Google Sheets, and an export is exactly the path that carries customer
 names, addresses and free text out of the site and into a spreadsheet.
-`src/lib/csv.ts` prefixes such a cell with an apostrophe — after checking it
-is not simply a negative number, which would otherwise break every sum.
+`apps/web/src/lib/csv.ts` prefixes such a cell with an apostrophe — after
+checking it is not simply a negative number, which would otherwise break
+every sum.
 
 Exports are `Cache-Control: no-store, private`, and the filename is
 sanitised so a stray quote cannot inject a header.
@@ -164,7 +165,7 @@ sanitised so a stray quote cannot inject a header.
 ## The audit log
 
 Every admin write records actor, action, entity and the before/after.
-`src/db/queries/audit.ts` exports **one writer and two readers, and no
+`apps/web/src/db/queries/audit.ts` exports **one writer and two readers, and no
 update or delete** — a log the application can rewrite is not evidence of
 anything. `recordAdminAction` never throws: it records work already
 committed, so a logging failure must not turn a saved edit into an error the
@@ -180,9 +181,10 @@ elsewhere, and every copy is a place data can leak from.
 - [ ] Every new query parameterised
 - [ ] Every new input validated with Zod on the server
 - [ ] Any new route that reads customer data scopes to the session
-- [ ] Any new external origin added to the CSP, and `npm run test:consent` passes
-- [ ] `npm run test:consent` and `npm run test:account` green — they cover
-      headers, enumeration resistance and session scoping
+- [ ] Any new external origin added to the CSP, and
+      `pnpm --filter web test:consent` passes
+- [ ] `pnpm --filter web test:consent` and `pnpm --filter web test:account`
+      green — they cover headers, enumeration resistance and session scoping
 
 ## Reporting
 

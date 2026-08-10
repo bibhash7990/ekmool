@@ -7,7 +7,8 @@
  *
  *   node scripts/check-budget.mjs research/audits/lh-home.json [limitKb]
  */
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { isAbsolute, join } from "node:path";
 
 const reportPath = process.argv[2];
 const limitKb = Number(process.argv[3] ?? 170);
@@ -17,7 +18,27 @@ if (!reportPath) {
   process.exit(1);
 }
 
-const report = JSON.parse(readFileSync(reportPath, "utf8"));
+/**
+ * The reports scripts/audit.mjs writes are under research/ at the repository
+ * root, two levels above this app. The path above — the one written out in
+ * docs/PERFORMANCE.md and docs/audit.md — resolves from there, but this
+ * script is now usually run with cwd apps/web, where it resolves to nothing.
+ *
+ * So: cwd first, because an operator naming a file they just produced means
+ * that file, then the repo root, so the documented command keeps working
+ * from either directory. Anything still missing is passed through unchanged
+ * and readFileSync reports it with the path the caller actually typed.
+ *
+ * import.meta.dirname, not process.cwd(), for the root: it is the same
+ * answer however the script was invoked.
+ */
+function resolveReport(candidate) {
+  if (isAbsolute(candidate) || existsSync(candidate)) return candidate;
+  const fromRepoRoot = join(import.meta.dirname, "..", "..", "..", candidate);
+  return existsSync(fromRepoRoot) ? fromRepoRoot : candidate;
+}
+
+const report = JSON.parse(readFileSync(resolveReport(reportPath), "utf8"));
 const requests = report.audits?.["network-requests"]?.details?.items ?? [];
 
 const scripts = requests.filter((r) => r.resourceType === "Script");

@@ -35,10 +35,10 @@ wrong row is the most expensive mistake available here.
 | `/admin/*` | Dynamic, `force-dynamic` | Yes |
 | `/api/*` | Route handlers | Yes, where relevant |
 
-**Why it matters.** `scripts/chaos.mjs` stops MySQL under live traffic and
-asserts that browsing keeps serving 200s. That property is not an
-optimisation, it is the reason a database outage costs you checkouts rather
-than the whole shop. Adding a database read to a page in the first three
+**Why it matters.** `apps/web/scripts/chaos.mjs` stops MySQL under live
+traffic and asserts that browsing keeps serving 200s. That property is not
+an optimisation, it is the reason a database outage costs you checkouts
+rather than the whole shop. Adding a database read to a page in the first three
 rows silently destroys it, and nothing will fail loudly — the page will
 simply start returning 500s the next time MySQL hiccups.
 
@@ -91,7 +91,7 @@ While `/products/[slug]` also had `dynamicParams = false`, that deletion was
 unrecoverable: with `fallback: false` there was nothing left to regenerate
 from, the route answered `NoFallbackError`, and all five product pages 404'd
 permanently with the database perfectly healthy. It was live. One stock edit
-in `/admin` did it. `scripts/chaos.mjs` §1b guards it.
+in `/admin` did it. `apps/web/scripts/chaos.mjs` §1b guards it.
 
 `dynamicParams` is `true` since M14 so a product created in the admin has a
 page, which as a side effect makes a path purge recoverable. **The rule
@@ -116,6 +116,18 @@ Redis channel and every instance applies it by calling its own
 ---
 
 ## Module boundaries
+
+The repository is a pnpm + Turborepo workspace, and the application is one
+package inside it:
+
+```
+apps/web/          the Next.js application (was the repo root)
+apps/mobile/       the Expo app — Phase 3, does not exist yet
+packages/          shared workspace packages — Phase 1, empty today
+docs/  research/   repository-wide, unmoved
+```
+
+Inside `apps/web`, which is the root of every `src/…` path in this document:
 
 ```
 src/
@@ -223,7 +235,7 @@ duplicate emails. Each is a `POST /api/jobs/<name>` authenticated with
 | Why does the cart survive a reload? | `src/store/cart-slice.ts` + the localStorage listener |
 | How does someone see their order with no account? | `src/lib/session.ts`, `/track` |
 | What does the admin gate on? | `src/lib/auth.ts` |
-| Why is this page slow / heavy? | `docs/PERFORMANCE.md`, then `npm run audit` |
+| Why is this page slow / heavy? | `docs/PERFORMANCE.md`, then `pnpm --filter web run audit` |
 
 ---
 

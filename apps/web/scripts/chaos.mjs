@@ -19,11 +19,20 @@
  */
 import { execFileSync, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import mysql from "mysql2/promise";
 import { loadEnv } from "./load-env.mts";
 
 loadEnv();
+
+/**
+ * k6 is run with its cwd pinned here rather than inherited: the script path
+ * passed to `k6 run` and the report path browse-10k.js returns from
+ * handleSummary — `../../research/loadtest/…`, because research/ stayed at
+ * the repository root — are both resolved against it.
+ */
+const APP_ROOT = join(import.meta.dirname, "..");
 
 const port = process.argv[2] ?? "3100";
 const base = `http://localhost:${port}`;
@@ -86,7 +95,7 @@ console.log("1. MySQL dies during a browse load");
       "DURATION=40s",
       "--quiet",
     ],
-    { stdio: ["ignore", "pipe", "pipe"] },
+    { cwd: APP_ROOT, stdio: ["ignore", "pipe", "pipe"] },
   );
 
   let k6Out = "";

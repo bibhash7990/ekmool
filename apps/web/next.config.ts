@@ -1,3 +1,4 @@
+import path from "node:path";
 import type { NextConfig } from "next";
 import createMDX from "@next/mdx";
 import { withSentryConfig } from "@sentry/nextjs";
@@ -107,6 +108,25 @@ const nextConfig: NextConfig = {
    * configuration at either end.
    */
   ...(process.env.VERCEL ? {} : { output: "standalone" as const }),
+  /**
+   * Trace from the workspace root, not from this app directory.
+   *
+   * File tracing defaults to the directory holding next.config.ts. In this
+   * pnpm workspace the dependencies are hoisted to the repo root's
+   * node_modules, so a trace rooted at `apps/web` finds none of them and
+   * `output: "standalone"` emits a server that cannot start — the build
+   * still succeeds, and the failure only appears at boot as a bare "Cannot
+   * find module".
+   *
+   * Setting it also changes the shape of the output tree. The entry point is
+   * no longer `.next/standalone/server.js`; it is
+   * `.next/standalone/apps/web/server.js`, with the traced node_modules at
+   * `.next/standalone/node_modules`. That is why `standalone:start` runs the
+   * server one level down, why scripts/standalone.mjs copies static, public
+   * and .env.local into `standalone/apps/web/`, and why the Dockerfile's
+   * COPY paths and CMD are what they are.
+   */
+  outputFileTracingRoot: path.join(import.meta.dirname, "../../"),
   // Required by the PostHog reverse proxy (API paths must keep their shape).
   skipTrailingSlashRedirect: true,
   pageExtensions: ["ts", "tsx", "mdx"],

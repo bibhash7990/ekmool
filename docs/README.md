@@ -16,6 +16,7 @@ writing code; the rest are reference for when you need them.
 | [keys-needed.md](keys-needed.md) | What to sign up for, in what order, and what each unlocks |
 | [audit.md](audit.md) | Lighthouse results and the defects the gates caught |
 | [loadtest.md](loadtest.md) | Load, chaos and failure testing |
+| **[mobile/](mobile/README.md)** | The native app programme — monorepo conversion, shared packages, the mobile API surface, the Expo app, and how it ships. Planning only; nothing built yet. |
 
 ---
 
@@ -25,12 +26,13 @@ writing code; the rest are reference for when you need them.
 |---|---|
 | Add a page | DESIGN-SYSTEM § *Adding a page*, then ARCHITECTURE § *Rendering* |
 | Add a database table or column | DATABASE, all of it |
-| Change a price, tax or discount | DATABASE § *Money*, then `src/lib/gst.ts` and `src/lib/coupons.ts` |
+| Change a price, tax or discount | DATABASE § *Money*, then `apps/web/src/lib/gst.ts` and `apps/web/src/lib/coupons.ts` |
 | Add a form or an API route | SECURITY § *Input*, § *Rate limiting* |
 | Add a third-party service | ARCHITECTURE § *Graceful degradation*, keys-needed |
 | Work out why a page got heavy | PERFORMANCE, then `npm run audit` |
 | Deploy, or scale past one container | deploy, docker, PERFORMANCE § *Scaling out* |
 | Understand an odd-looking decision | Look for the comment. It is almost always there, and it says why |
+| Work on the Android / iOS app | [mobile/README.md](mobile/README.md), then [`research/mobile-stack-research.md`](../research/mobile-stack-research.md) |
 
 ---
 

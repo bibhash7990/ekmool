@@ -8,9 +8,9 @@
 # Add the reverse proxy (gzip offload + long-lived asset caching) with:
 #   docker compose --profile edge up -d --build
 #
-# Configuration comes from .env.local — the same file `npm run dev` uses.
-# Copy .env.example to .env.local first. Values that differ inside the
-# network (the database host, the cron target) are overridden per service
+# Configuration comes from .env.local — the same file `pnpm dev` uses.
+# Copy .env.example to apps/web/.env.local first. Values that differ inside
+# the network (the database host, the cron target) are overridden per service
 # below and win over the file.
 #
 # Full notes, including production deployment: docs/docker.md
@@ -21,18 +21,27 @@ name: ekmool
 # different commands, so their configuration is shared here rather than
 # repeated three times.
 x-env-files: &env-files
-  # Both optional, later wins — the same precedence Next itself applies, so
-  # a value behaves the same under `npm run dev` and under compose.
+  # All optional, later wins — the same precedence Next itself applies, so
+  # a value behaves the same under `pnpm dev` and under compose.
+  #
+  # Three paths rather than two since the monorepo move. `next dev` and
+  # `next build` read .env.local from the app directory, so apps/web/.env.local
+  # is the file a developer actually has, and docs/CONTRIBUTING.md now says to
+  # create it there. The repository-root pair is still read first, because a
+  # server deploy writes `.env` at the root and nothing should have to move
+  # for that to keep working.
   #
   # One caveat worth knowing: compose expands ${VAR} in THIS file from the
-  # shell and from `.env` only — never from `.env.local`. That only affects
-  # the mysql service below, which needs its credentials at container-init
-  # time. If you change DATABASE_USER or DATABASE_PASSWORD, put them in
-  # `.env` as well, or MySQL will initialise with one password while the app
-  # connects with another.
+  # shell and from `.env` only — never from either `.env.local`. That only
+  # affects the mysql service below, which needs its credentials at
+  # container-init time. If you change DATABASE_USER or DATABASE_PASSWORD,
+  # put them in `.env` as well, or MySQL will initialise with one password
+  # while the app connects with another.
   - path: .env
     required: false
   - path: .env.local
+    required: false
+  - path: apps/web/.env.local
     required: false
 
 x-app-image: &app-image
@@ -52,8 +61,9 @@ services:
     container_name: ekmool-mysql
     restart: unless-stopped
     ports:
-      # Published so host tooling (npm run test:checkout, scripts/loadtest.mjs,
-      # a GUI client) can still reach it. Drop this line in production — the
+      # Published so host tooling (pnpm --filter web test:checkout,
+      # apps/web/scripts/loadtest.mjs, a GUI client) can still reach it.
+      # Drop this line in production — the
       # app talks to it over the compose network and nothing else should.
       - "3306:3306"
     environment:
@@ -100,8 +110,9 @@ services:
     container_name: ekmool-redis
     restart: unless-stopped
     ports:
-      # Published for host tooling — `npm run dev` and `npm run test:offline`
-      # against a local server. Drop this line in production, as with
+      # Published for host tooling — `pnpm dev` and
+      # `pnpm --filter web test:offline` against a local server.
+      # Drop this line in production, as with
       # MySQL above: an open Redis on a public interface is how a machine
       # gets mined, and the app reaches it over the compose network.
       # docker-compose.staging.yml already removes it.
@@ -203,7 +214,9 @@ services:
     <<: *app-image
     container_name: ekmool-cron
     restart: unless-stopped
-    command: ["npm", "run", "cron"]
+    # The image's working directory is the workspace root, so the script is
+    # addressed through pnpm's filter rather than run directly.
+    command: ["pnpm", "--filter", "web", "cron"]
     environment:
       DATABASE_HOST: mysql
       DATABASE_PORT: "3306"
@@ -213,7 +226,7 @@ services:
       REDIS_URL: redis://redis:6379
       # Shared with the backup service. This container is the one that can
       # sign an S3 request — the SigV4 implementation is TypeScript in
-      # src/lib/storage.ts — so it ships what the other one wrote.
+      # apps/web/src/lib/storage.ts — so it ships what the other one wrote.
       BACKUP_DIR: /backups
     volumes:
       - backup-data:/backups

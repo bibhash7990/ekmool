@@ -15,10 +15,23 @@
  * here are written directly in IST.
  */
 import { spawn } from "node:child_process";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import cron from "node-cron";
 import { loadEnv } from "./load-env.mts";
 
 loadEnv();
+
+/**
+ * The `backup` script lives in apps/web/package.json, and `npm run` resolves
+ * it from the nearest package.json above the working directory. Under PM2
+ * that directory is whatever the operator's ecosystem file says, and since
+ * the monorepo move the repository root has its own package.json with no
+ * `backup` script in it — so an inherited cwd one level too high turns the
+ * 04:00 upload into a nightly "Missing script" with no other symptom.
+ * Pinned from the script's own location so it cannot drift.
+ */
+const APP_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 /**
  * Where to POST the job routes. This is an INTERNAL address, which is not
@@ -116,6 +129,7 @@ for (const entry of SCHEDULE) {
  */
 function uploadBackups(): void {
   const child = spawn("npm", ["run", "backup", "--", "--upload-only"], {
+    cwd: APP_ROOT,
     stdio: "inherit",
     shell: process.platform === "win32",
   });

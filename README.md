@@ -19,8 +19,12 @@ Needs only Docker. Brings up MySQL, the schema, the catalogue content, the
 site build, the web server and the cron scheduler:
 
 ```bash
-cp .env.example .env.local && docker compose up -d --build
+cp .env.example apps/web/.env.local && docker compose up -d --build
 ```
+
+Run that from the repository root. This is a pnpm + Turborepo workspace: the
+site is the `web` package in `apps/web`, while `.env.example`, the compose
+files and the docs stay at the root.
 
 Then open http://localhost:3000. Add nginx (gzip offload + caching, and a
 large difference under load) with `docker compose --profile edge up -d --build`,
@@ -28,22 +32,27 @@ which serves on :8080. Details in [docs/docker.md](docs/docker.md).
 
 ### Or locally, with Node
 
-Needs Node 22 and Docker for the database:
+Needs Node 22, pnpm 11, and Docker for the database:
 
 ```bash
-npm install && cp .env.example .env.local
+pnpm install && cp .env.example apps/web/.env.local
 ```
 
 ```bash
-npm run db:up && npm run db:migrate && npm run db:seed
+pnpm --filter web db:up
+pnpm --filter web db:migrate && pnpm --filter web db:seed
 ```
 
 ```bash
-npm run dev
+pnpm dev
 ```
 
-`.env.local` needs `CRON_SECRET`, `REVALIDATE_SECRET` and `SESSION_SECRET`
-filled in — any random hex will do, one value each:
+The env file goes in `apps/web/` because that is where `next dev` and
+`next build` read it from; the template it is copied from stays at the root,
+where it documents the whole system.
+
+`apps/web/.env.local` needs `CRON_SECRET`, `REVALIDATE_SECRET` and
+`SESSION_SECRET` filled in — any random hex will do, one value each:
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
@@ -93,55 +102,65 @@ Numbers and method: [docs/loadtest.md](docs/loadtest.md).
 
 ## Scripts
 
+Four are run from the repository root, because they either fan out to the
+workspace or address the whole repository:
+
 | Command | What it does |
 |---|---|
-| `npm run dev` | Development server |
-| `npm run build` | Production build |
-| `npm run standalone` | Assemble `.next/standalone` (copies static, public, env) |
-| `npm run standalone:start` | Run the standalone bundle |
-| `npm run typecheck` / `lint` | TypeScript and ESLint |
-| `npm run docker:up` / `docker:edge` | Whole stack, without / with nginx |
-| `npm run docker:staging` | The same stack as a staging environment, on its own ports and volumes |
-| `npm run docker:logs` / `docker:down` / `docker:reset` | Tail, stop, wipe |
-| `npm run backup` | Dump, verify, upload to object storage, prune. `-- --upload-only` ships what the container already wrote |
-| `npm run uptime -- https://your-site` | Poll `/api/health`, alert on the transition, recover quietly |
-| `npm run db:up` / `db:down` | Start/stop the MySQL container |
-| `npm run db:migrate` / `db:seed` | Schema and catalogue content |
-| `npm run db:reset-stock` | Restore stock after load testing (dev only) |
-| `npm run cron` | Run the three scheduled jobs locally |
+| `pnpm dev` | Development server (filters to `web` for you) |
+| `pnpm --filter web build` | Production build |
+| `pnpm turbo typecheck` | TypeScript, every package |
+| `pnpm turbo lint` | ESLint, every package |
+
+Everything else belongs to the web app and is run as
+`pnpm --filter web <command>` — the left column below is the `<command>`:
+
+| `pnpm --filter web …` | What it does |
+|---|---|
+| `standalone` | Assemble `.next/standalone` (copies static, public, env) |
+| `standalone:start` | Run the standalone bundle |
+| `docker:up` / `docker:edge` | Whole stack, without / with nginx |
+| `docker:staging` | The same stack as a staging environment, on its own ports and volumes |
+| `docker:logs` / `docker:down` / `docker:reset` | Tail, stop, wipe |
+| `backup` | Dump, verify, upload to object storage, prune. `--upload-only` ships what the container already wrote |
+| `uptime https://your-site` | Poll `/api/health`, alert on the transition, recover quietly |
+| `db:up` / `db:down` | Start/stop the MySQL container |
+| `db:migrate` / `db:seed` | Schema and catalogue content |
+| `db:reset-stock` | Restore stock after load testing (dev only) |
+| `cron` | Run the three scheduled jobs locally |
 
 ### Tests
 
-All of these run against a live server and a live database, so start one first
-(`npm run standalone:start`, or `npm run dev`).
+All of these are web-app scripts too, run the same way. They need a live
+server and a live database, so start one first
+(`pnpm --filter web standalone:start`, or `pnpm dev`).
 
 `test:admin` is the exception and needs only the database. The admin is
 Clerk-gated and Clerk is not configured in development, so there is no HTTP
 surface to drive; it imports the real query modules instead, through the
-`@/` resolve hook in `scripts/alias-loader.mjs`. That means it exercises the
-SQL the application runs rather than SQL written inside the test, which is
-the difference between a green tick and evidence.
+`@/` resolve hook in `apps/web/scripts/alias-loader.mjs`. That means it
+exercises the SQL the application runs rather than SQL written inside the
+test, which is the difference between a green tick and evidence.
 
-| Command | Covers |
+| `pnpm --filter web …` | Covers |
 |---|---|
-| `npm run test:checkout` | Idempotency, atomic stock, oversell, webhook signature, rate limiting |
-| `npm run test:account` | Order lookup, enumeration resistance, session scoping, cancellation, the account area |
-| `npm run test:commerce` | GST arithmetic and the split, invoice numbering, returns windows, re-order, prefill |
-| `npm run test:consent` | Security headers, that nothing tracks before consent, the grievance notice, the honeypot |
-| `npm run test:discovery` | Search ranking and synonyms, filters, PIN code estimates, wishlist scoping, back-in-stock |
-| `npm run test:promotions` | Coupon arithmetic, caps under concurrency, GST on a discounted line, verified-buyer reviews, newsletter double opt-in, share cards |
-| `npm run test:admin` | CSV escaping and formula injection, presigned uploads, product CRUD and what it refuses, report arithmetic, return transitions, the audit log |
-| `npm run test:home` | Home page prices reconcile to the database, delivery terms to the shipping constants, and the review section appears only when a real review is published (run it before anything that publishes one) |
-| `npm run test:offline` | The service worker's exclusion list, manifest installability, the CSP directives a PWA needs, and the shared rate limiter |
-| `npm run test:db-down` | Browsing with MySQL stopped (stop it first) |
-| `npm run test:jobs` | Cron authorisation, stale-order cancel, reminder dedupe |
-| `npm run validate:schema` | Titles, descriptions, canonicals, JSON-LD, internal links |
-| `npm run audit` | Lighthouse gates: SEO 100, Perf ≥90, A11y ≥95, BP ≥95, JS per page (190 KB; 200 on the product page) |
-| `npm run loadtest` | k6 browse + checkout load, verified against the database |
-| `npm run chaos` | Kills MySQL under live traffic and checks what survives |
+| `test:checkout` | Idempotency, atomic stock, oversell, webhook signature, rate limiting |
+| `test:account` | Order lookup, enumeration resistance, session scoping, cancellation, the account area |
+| `test:commerce` | GST arithmetic and the split, invoice numbering, returns windows, re-order, prefill |
+| `test:consent` | Security headers, that nothing tracks before consent, the grievance notice, the honeypot |
+| `test:discovery` | Search ranking and synonyms, filters, PIN code estimates, wishlist scoping, back-in-stock |
+| `test:promotions` | Coupon arithmetic, caps under concurrency, GST on a discounted line, verified-buyer reviews, newsletter double opt-in, share cards |
+| `test:admin` | CSV escaping and formula injection, presigned uploads, product CRUD and what it refuses, report arithmetic, return transitions, the audit log |
+| `test:home` | Home page prices reconcile to the database, delivery terms to the shipping constants, and the review section appears only when a real review is published (run it before anything that publishes one) |
+| `test:offline` | The service worker's exclusion list, manifest installability, the CSP directives a PWA needs, and the shared rate limiter |
+| `test:db-down` | Browsing with MySQL stopped (stop it first) |
+| `test:jobs` | Cron authorisation, stale-order cancel, reminder dedupe |
+| `validate:schema` | Titles, descriptions, canonicals, JSON-LD, internal links |
+| `audit` | Lighthouse gates: SEO 100, Perf ≥90, A11y ≥95, BP ≥95, JS per page (190 KB; 200 on the product page) |
+| `loadtest` | k6 browse + checkout load, verified against the database |
+| `chaos` | Kills MySQL under live traffic and checks what survives |
 
-`npm run audit` and `npm run loadtest` need Chrome and
-[k6](https://k6.io) respectively.
+`audit` and `loadtest` need Chrome and [k6](https://k6.io) respectively.
 
 **Run `test:db-down` from a warm cache**, which means browsing the site once
 before stopping MySQL — and not straight after `chaos` or `test:admin`. Both
@@ -189,6 +208,9 @@ are touching.
 
 ## Notes for anyone extending this
 
+Paths below are relative to `apps/web/`, where the application lives.
+`docs/`, `research/` and `docker/` stayed at the repository root.
+
 - **Brand colours and type live in `src/app/globals.css`** as Tailwind v4
   `@theme` tokens. Use the generated utilities (`bg-ek-paper`,
   `text-ek-green-900`). A hardcoded hex in a component is a review failure.
@@ -204,7 +226,7 @@ are touching.
   `dynamicParams = true`, so the failure is no longer permanent, but the
   rule is unchanged and the reason for it never depended on the bug.
   Documented at the call site in `src/lib/revalidate.ts` and guarded by
-  `npm run chaos`.
+  `pnpm --filter web chaos`.
 - **A product page must work without editorial copy.**
   `src/content/products.ts` holds hand-written copy for the five launch
   products and is the better source when it exists. A product created in the
@@ -254,8 +276,8 @@ are touching.
 - **Consent is the load condition, not a filter.** `AnalyticsLoader` does not
   reach `import("posthog-js")` until a yes has been recorded, so before a
   decision there is no bundle, no request and no cookie — which is what
-  `npm run test:consent` asserts against the served bytes. A banner sitting
-  on top of a tracker that runs anyway is worse than no banner, because it
+  `pnpm --filter web test:consent` asserts against the served bytes. A
+  banner sitting on top of a tracker that runs anyway is worse than no banner, because it
   tells the visitor something they cannot check.
 - **There is no "marketing" toggle,** because there is no marketing tracking.
   A switch that controls nothing is theatre and teaches people that these

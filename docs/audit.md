@@ -1,21 +1,23 @@
 # Lighthouse audit
 
-Measured against a **production build** (`npm run build` → `npx next start -p 3100`)
+Measured against a **production build** served by `next start` on port 3100,
 with **no third-party keys configured** — the default state of a fresh clone.
 Last re-run 2026-08-05, at M12.
 
 - Lighthouse 13.4.1 (via `npx`), Chrome stable, headless
 - Mobile form factor with default screen emulation and network throttling
-- Reports: `research/audits/lh-{home,catalog,product,blog}.json`
+- Reports: `research/audits/lh-{home,catalog,product,blog}.json`, at the
+  repository root — `research/` did not move when the app did
 
 Reproduce:
 
 ```bash
-npm run build && npx next start -p 3100
+pnpm --filter web build
+pnpm --filter web exec next start -p 3100
 ```
 
 ```bash
-node scripts/audit.mjs 3100
+pnpm --filter web run audit 3100
 ```
 
 The script fails the process on any gate breach, so it works unchanged as a CI step.
@@ -162,8 +164,8 @@ loader's window, then read every resource entry:
 
 Self-hosted fonts (`next/font/google`) mean there is no `fonts.googleapis.com`
 request either. This is now enforced by the audit script rather than eyeballed —
-`scripts/audit.mjs` fails on any off-origin request, so a future dependency that
-phones home breaks the build instead of quietly shipping.
+`apps/web/scripts/audit.mjs` fails on any off-origin request, so a future
+dependency that phones home breaks the build instead of quietly shipping.
 
 ## Known limits
 

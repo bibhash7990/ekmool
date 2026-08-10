@@ -9,8 +9,8 @@ images and not the server.
 
 ## The budget
 
-`npm run audit` runs Lighthouse against four pages and **fails the build**
-on any of them.
+`pnpm --filter web run audit` runs Lighthouse against four pages and **fails
+the build** on any of them.
 
 | Page | Script transfer | Perf | A11y | Best practices | SEO |
 |---|---|---|---|---|---|
@@ -30,8 +30,9 @@ a licence to drift.
 
 A response served by the service worker has a `transferSize` of zero. If one
 were counted, the budget would quietly start measuring a warm cache and
-would absorb a real regression without complaining. `scripts/audit.mjs`
-fails if any counted script came from the worker. Lighthouse registers it on
+would absorb a real regression without complaining.
+`apps/web/scripts/audit.mjs` fails if any counted script came from the
+worker. Lighthouse registers it on
 `load`, after the trace window, so none do — but that is asserted, not
 assumed.
 
@@ -44,7 +45,9 @@ same build. Three consecutive runs of an unchanged home page in M16 gave
 **189, 188 and 178 KB**.
 
 So a total that jumps ~9 KB is not evidence of anything. Before believing a
-regression, compare the *list* of chunks the page pulls:
+regression, compare the *list* of chunks the page pulls. Run this from the
+**repository root**: `research/` stayed there when the application moved to
+`apps/web`, so the relative path resolves from the root and nowhere else.
 
 ```bash
 node -e "const r=require('./research/audits/lh-home.json'); console.log(r.audits['network-requests'].details.items.filter(i=>i.resourceType==='Script').map(i=>[i.url.split('/').pop(), i.transferSize]))"
@@ -106,7 +109,7 @@ This was measured, twice, with opposite results.
 
 The rule: dynamic import is for what usually **does not render**. For
 anything that always renders it is a net loss. Measure before and after with
-`npm run audit`; do not reason about it.
+`pnpm --filter web run audit`; do not reason about it.
 
 ### 4. The cart is localStorage, not IndexedDB
 
@@ -201,15 +204,16 @@ and why `freshPage()` exists in the test scripts.
 ## Measuring
 
 ```bash
-npm run build && npm run standalone
-npm run standalone:start          # or docker compose up -d
-npm run audit                     # the gate
-npm run loadtest                  # k6: browse + checkout
-npm run chaos                     # kill MySQL under traffic
+pnpm --filter web build && pnpm --filter web standalone
+pnpm --filter web standalone:start   # or docker compose up -d
+pnpm --filter web run audit              # the gate
+pnpm --filter web loadtest           # k6: browse + checkout
+pnpm --filter web chaos              # kill MySQL under traffic
 ```
 
-Reports land in `research/audits/`. When the budget fails, read the
-network-requests audit in the JSON — it names the chunk that grew.
+Reports land in `research/audits/` at the repository root. When the budget
+fails, read the network-requests audit in the JSON — it names the chunk that
+grew.
 
 ### Before claiming something is faster
 

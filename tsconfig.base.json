@@ -12,26 +12,12 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     // scripts/*.mts run through Node's native type stripping, which requires
-    // the real file extension in the import specifier.
+    // the real file extension in the import specifier. Dropping this does
+    // not fail typecheck — it fails db:migrate and the cron runner, at
+    // runtime, which is why it lives in the shared base rather than in one
+    // app's config where a later cleanup might not recognise it.
     "allowImportingTsExtensions": true,
     "jsx": "react-jsx",
-    "incremental": true,
-    "plugins": [
-      {
-        "name": "next"
-      }
-    ],
-    "paths": {
-      "@/*": ["./src/*"]
-    }
-  },
-  "include": [
-    "next-env.d.ts",
-    "**/*.ts",
-    "**/*.tsx",
-    ".next/types/**/*.ts",
-    ".next/dev/types/**/*.ts",
-    "**/*.mts"
-  ],
-  "exclude": ["node_modules"]
+    "incremental": true
+  }
 }

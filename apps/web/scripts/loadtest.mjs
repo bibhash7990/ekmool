@@ -31,9 +31,23 @@ loadEnv();
 
 const port = process.argv[2] ?? "3100";
 const base = `http://localhost:${port}`;
-const root = process.cwd();
-const dataDir = join(root, "scripts", "k6", "data");
-const outDir = join(root, "research", "loadtest");
+
+/**
+ * Two roots, and they are not the same one.
+ *
+ * The k6 fixtures this script generates belong to the app —
+ * `.gitignore` ignores them as `/apps/web/scripts/k6/data/`. The reports
+ * belong to the repository: research/ deliberately stayed at the root in the
+ * monorepo move, docs/loadtest.md says reports land in `research/loadtest/`,
+ * and .gitignore ignores `/research/loadtest/*.json` there.
+ *
+ * Both are derived from import.meta.dirname rather than process.cwd() so
+ * that the destination does not depend on where the script was launched
+ * from; runK6 below pins k6's own cwd to APP_ROOT for the same reason.
+ */
+const APP_ROOT = join(import.meta.dirname, "..");
+const dataDir = join(APP_ROOT, "scripts", "k6", "data");
+const outDir = join(APP_ROOT, "..", "..", "research", "loadtest");
 
 mkdirSync(dataDir, { recursive: true });
 mkdirSync(outDir, { recursive: true });
@@ -86,7 +100,15 @@ function runK6(script, env = {}) {
   }
 
   try {
-    execFileSync(K6, args, { stdio: "inherit", timeout: 15 * 60_000 });
+    // Pinned to the app root: both the script path above and the report
+    // paths the k6 scripts return from handleSummary are relative to k6's
+    // working directory, so leaving it to inherit whatever cwd this process
+    // was started in would scatter the reports.
+    execFileSync(K6, args, {
+      cwd: APP_ROOT,
+      stdio: "inherit",
+      timeout: 15 * 60_000,
+    });
     return { ok: true };
   } catch (error) {
     // Non-zero exit means a threshold failed — that is a test result, not

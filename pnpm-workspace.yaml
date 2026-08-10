@@ -1,0 +1,23 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# pnpm 11 refuses to run a dependency's install-time script unless it is
+# named here. Every entry is a decision about code we let run on a developer
+# machine and on a build server, so each one carries its reason. Default to
+# false: an ignored postinstall usually costs a log line, and the ones that
+# cost more announce themselves loudly.
+allowBuilds:
+  # Downloads the sentry-cli binary. @sentry/nextjs shells out to it during
+  # `next build` to upload source maps — without it a production stack trace
+  # is a list of numbers. Blocked, the build still succeeds and the maps
+  # silently do not upload, which is the worst shape of failure available.
+  "@sentry/cli": true
+
+  # Selects the right napi native binding at install time. eslint's import
+  # resolver needs it; blocked, `turbo lint` fails to resolve any import.
+  unrs-resolver: true
+
+  # Its postinstall only prints a funding banner. Nothing depends on it
+  # having run.
+  core-js: false

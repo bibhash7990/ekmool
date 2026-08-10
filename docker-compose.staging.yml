@@ -10,7 +10,7 @@
 # What staging is for is the deploy itself — the migration running against a
 # database that has data in it, the build finding a real catalogue, nginx
 # and the app agreeing about headers. None of that is exercised by
-# `npm run dev`.
+# `pnpm dev`.
 #
 # The four differences below, and why each one:
 services:

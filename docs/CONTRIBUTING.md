@@ -8,14 +8,24 @@ whatever you are touching.
 ## Setting up
 
 ```bash
-cp .env.example .env.local
+cp .env.example apps/web/.env.local
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 # a different value for each of SESSION_SECRET, CRON_SECRET, REVALIDATE_SECRET
 
-npm install
-npm run db:up && npm run db:migrate && npm run db:seed
-npm run dev
+pnpm install
+pnpm --filter web db:up
+pnpm --filter web db:migrate && pnpm --filter web db:seed
+pnpm dev
 ```
+
+`.env.example` stays at the repository root, where it documents the whole
+system, but `next dev` and `next build` read `.env.local` from the app
+directory — which is why the copy lands in `apps/web/`. One template, one
+place to add a variable.
+
+This is a pnpm + Turborepo workspace: the application is `apps/web`, which
+is the `--filter` handle in every command below. `pnpm dev` at the root is
+the exception — it fans out to the web app for you.
 
 No third-party keys are needed. The site builds, runs and takes Cash on
 Delivery orders with none configured — see `docs/keys-needed.md` for what
@@ -24,7 +34,7 @@ each one adds.
 Or the whole stack in one command:
 
 ```bash
-npm run docker:up
+pnpm --filter web docker:up
 ```
 
 ---
@@ -63,11 +73,14 @@ Each has a longer explanation in the linked document.
 
 The project has taken **one** new runtime dependency since v1.0.0
 (`ioredis`), and it was asked for and approved before it was installed.
+`turbo` is a devDependency of the workspace root, not a dependency of the
+shop: it schedules the scripts and ships nothing to a server or a browser,
+so it does not change that count.
 
 Before adding one, answer three questions in the PR:
 
 1. What does it do that forty lines of ours would not?
-2. What does it pull in? (`npm ls <pkg>`, and look at the tree.)
+2. What does it pull in? (`pnpm why <pkg>`, and look at the tree.)
 3. What happens when it is unmaintained in two years?
 
 Things deliberately **not** taken, with the reasoning, so you do not have to
@@ -75,11 +88,11 @@ re-litigate them:
 
 | Not taken | Instead | Why |
 |---|---|---|
-| `@aws-sdk/client-s3` + presigner | `src/lib/storage.ts` | ~40 packages to produce one signed URL; SigV4 is a documented HMAC chain `node:crypto` already has |
-| A CSV library | `src/lib/csv.ts` | RFC 4180 quoting is twelve lines, and we needed a formula-injection guard no library ships by default |
-| Workbox | `public/sw.js` | A hand-written worker is 250 readable lines and no build step |
+| `@aws-sdk/client-s3` + presigner | `apps/web/src/lib/storage.ts` | ~40 packages to produce one signed URL; SigV4 is a documented HMAC chain `node:crypto` already has |
+| A CSV library | `apps/web/src/lib/csv.ts` | RFC 4180 quoting is twelve lines, and we needed a formula-injection guard no library ships by default |
+| Workbox | `apps/web/public/sw.js` | A hand-written worker is 250 readable lines and no build step |
 | An ORM | raw `mysql2` | Every query that matters is one an ORM would fight |
-| A search library / FULLTEXT | `src/lib/search.ts` | At five products an in-memory scan is faster, survives MySQL being down, and can match "haldi" to turmeric — which the index could not |
+| A search library / FULLTEXT | `apps/web/src/lib/search.ts` | At five products an in-memory scan is faster, survives MySQL being down, and can match "haldi" to turmeric — which the index could not |
 | A reCAPTCHA SDK | Turnstile via `<script>` + `fetch` | No dependency, no puzzle for real users |
 
 `ioredis` was taken because hand-rolling connection pooling, reconnection
@@ -92,10 +105,11 @@ SigV4, which is a pure function.
 
 A change is finished when all of these are true. Not most.
 
-- [ ] `npm run typecheck` clean
-- [ ] `npm run lint` clean
+- [ ] `pnpm turbo typecheck` clean
+- [ ] `pnpm turbo lint` clean
 - [ ] The suites that cover what you touched are green (table below)
-- [ ] `npm run audit` passes — SEO and a11y **100**, script budget held
+- [ ] `pnpm --filter web run audit` passes — SEO and a11y **100**, script budget
+      held
 - [ ] New behaviour has a test that would fail without it
 - [ ] Comments explain **why**, not what
 - [ ] Docs updated if you changed a rule, a schema or an env var
@@ -104,7 +118,10 @@ A change is finished when all of these are true. Not most.
 
 ### Which suite covers what
 
-| Command | Covers |
+Every one of these is a web-app script, so the command is
+`pnpm --filter web <command>` — the left column is the `<command>` part.
+
+| `pnpm --filter web …` | Covers |
 |---|---|
 | `test:checkout` | Idempotency, atomic stock, oversell, webhook signature |
 | `test:account` | Lookup, enumeration resistance, session scoping, cancellation |
@@ -120,11 +137,11 @@ A change is finished when all of these are true. Not most.
 | `test:db-down` | Browsing with MySQL stopped |
 | `validate:schema` | Titles, canonicals, JSON-LD, internal links |
 
-Most need a running server (`npm run standalone:start`). `test:admin` needs
-only the database. **Run `test:db-down` from a warm cache**, and not
-straight after `chaos` or `test:admin` — both end by hard-purging the
-catalogue tag, and an expired static page with no database has nothing to
-serve. Since M16 the home page reads the catalogue too, so it is in that
+Most need a running server (`pnpm --filter web standalone:start`).
+`test:admin` needs only the database. **Run `test:db-down` from a warm
+cache**, and not straight after `chaos` or `test:admin` — both end by
+hard-purging the catalogue tag, and an expired static page with no database
+has nothing to serve. Since M16 the home page reads the catalogue too, so it is in that
 set: `/`, `/products` and `/sitemap.xml` are the three pages a hard purge
 takes offline for the length of an outage.
 
@@ -135,7 +152,9 @@ note rather than failing if something has already published one.
 
 Suites are **not parallel-safe**: several drive checkout through the same
 rate limiter, and running them together produces 429s that look like
-failures and are not. CI runs them sequentially, each as its own step.
+failures and are not. CI runs them sequentially, each as its own step, and
+they are deliberately not Turbo tasks — a task graph exists to parallelise,
+which is the one thing these must not do.
 
 ---
 
@@ -213,9 +232,10 @@ than guessed at.
 The pattern that has worked for fifteen of them:
 
 1. Migration first, with a comment block explaining the reasoning.
-2. Query module in `src/db/queries/` — pure data access, transactions where
-   concurrency matters.
-3. Pure logic in `src/lib/` — arithmetic, no I/O, easy to assert on.
+2. Query module in `apps/web/src/db/queries/` — pure data access,
+   transactions where concurrency matters.
+3. Pure logic in `apps/web/src/lib/` — arithmetic, no I/O, easy to assert
+   on.
 4. Server action or route handler — Zod, auth, then call the query.
 5. UI — server components, client only at the interactive leaf.
 6. A test script that would fail without the feature.

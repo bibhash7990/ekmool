@@ -31,12 +31,12 @@ async function main(): Promise<void> {
   });
 
   try {
-    for (const product of SEED_PRODUCTS) {
+    for (const [index, product] of SEED_PRODUCTS.entries()) {
       await connection.query(
         `INSERT INTO products
            (slug, name, origin_state, gi_tag_name, short_description,
-            long_description, accent, is_active)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+            long_description, accent, is_active, sort_order)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)
          ON DUPLICATE KEY UPDATE
            name = VALUES(name),
            origin_state = VALUES(origin_state),
@@ -53,6 +53,21 @@ async function main(): Promise<void> {
           product.shortDescription,
           product.longDescription,
           product.accent,
+          // 1-based, and set here rather than left to the column default.
+          //
+          // migration 008 backfills `sort_order = id WHERE sort_order = 0`,
+          // which fixes a database that already holds the catalogue and does
+          // nothing at all on an empty one — and CI migrates before it seeds.
+          // Every seeded product then kept sort_order 0, so createProduct's
+          // `MAX(sort_order) + 1` handed a brand new product 1 instead of 6
+          // and test:admin failed on "it sorts after everything already in
+          // the catalogue". It passed on any machine seeded before 008 was
+          // written, which is why it survived so long.
+          //
+          // Deliberately NOT in the ON DUPLICATE KEY UPDATE list above:
+          // reseeding a live database must not undo an order the owner has
+          // dragged into place in /admin/products.
+          index + 1,
         ],
       );
 

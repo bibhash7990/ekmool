@@ -72,11 +72,16 @@ source maps), `NEXT_PUBLIC_POSTHOG_KEY`.
 
 ## Path A — Vercel
 
-1. Push to GitHub, import the repo. Framework detection handles the rest; no
-   build settings to change.
-2. Add the environment variables above to Production (and Preview if you want
+1. Push to GitHub, import the repo.
+2. **Set the project's Root Directory to `apps/web`** under Settings →
+   General. This is a monorepo: the repository root holds the workspace and
+   no Next.js application, so a project pointed at it builds nothing. The
+   setting lives in the Vercel dashboard, not in the repository, so it is
+   the one part of a deploy that no diff can show you. Vercel detects pnpm
+   from `packageManager` and the lockfile; nothing else needs changing.
+3. Add the environment variables above to Production (and Preview if you want
    previews working against a separate database).
-3. Deploy.
+4. Deploy.
 
 **Cron** is already declared in `vercel.json` — hourly abandoned-payment
 reminder, daily low-stock report at 02:30 UTC (08:00 IST), daily stale-order
@@ -109,12 +114,16 @@ Assumes Ubuntu, Node 22, MySQL 8 on the same host or a private network.
 ### Build and run
 
 ```bash
-npm ci && npm run build && npm run standalone
+pnpm install --frozen-lockfile
+pnpm --filter web build && pnpm --filter web standalone
 ```
 
-`npm run standalone` copies `.next/static`, `public/`, and `.env.local` into
-`.next/standalone/`. `next build` recreates that directory every time, so this
-step is not optional — skip it and you get an unstyled page with no hydration,
+`pnpm --filter web standalone` copies `.next/static`, `public/`, and
+`.env.local` into `apps/web/.next/standalone/apps/web/` — the server and its
+chunks sit one level down inside the standalone tree, because
+`outputFileTracingRoot` points at the workspace root so the traced
+`node_modules` can sit above them. `next build` recreates that directory
+every time, so this step is not optional — skip it and you get an unstyled page with no hydration,
 or an app that boots fine and then answers every checkout with
 `503 DB_UNAVAILABLE` because the database variables are simply absent. On a
 real host, supply env through PM2 or systemd rather than the file.
@@ -129,7 +138,7 @@ is the entire fix.
 module.exports = {
   apps: [{
     name: "ekmool",
-    script: ".next/standalone/server.js",
+    script: "apps/web/.next/standalone/apps/web/server.js",
     instances: "max",
     exec_mode: "cluster",
     env: { NODE_ENV: "production", PORT: 3000, HOSTNAME: "127.0.0.1" },
@@ -141,7 +150,7 @@ module.exports = {
 pm2 start ecosystem.config.js && pm2 save && pm2 startup
 ```
 
-One caveat: the rate limiter in `src/proxy.ts` keeps its token buckets in
+One caveat: the rate limiter in `apps/web/src/proxy.ts` keeps its token buckets in
 process memory, so in cluster mode each worker enforces its own limit — N
 workers means an effective limit of N×. It is written behind a `RateLimiter`
 interface for exactly this reason; swap `InMemoryTokenBucket` for a Redis
@@ -178,7 +187,7 @@ server {
 ```
 
 `X-Real-IP` and `X-Forwarded-For` matter: `clientIp()` in
-`src/lib/rate-limit.ts` reads them, and without them every request looks like
+`apps/web/src/lib/rate-limit.ts` reads them, and without them every request looks like
 it came from `127.0.0.1` and shares one rate-limit bucket.
 
 TLS via `certbot --nginx -d ekmool.com -d www.ekmool.com`.
@@ -206,7 +215,7 @@ the affected paths — Cloudflare has no way to know the origin revalidated.
 Vercel Cron does not exist here. Either run the bundled scheduler:
 
 ```bash
-pm2 start "npm run cron" --name ekmool-cron
+pm2 start "pnpm --filter web cron" --name ekmool-cron
 ```
 
 (`node-cron`, `Asia/Kolkata`, same four jobs) — or use system cron:
@@ -307,7 +316,7 @@ docker compose run --rm --entrypoint sh -e MYSQL_PWD=$MYSQL_ROOT_PASSWORD backup
 ## Staging
 
 ```bash
-npm run docker:staging
+pnpm --filter web docker:staging
 ```
 
 An override on the production compose file rather than a second file, so
@@ -333,7 +342,7 @@ Point it at `/api/health`.
 If you want one that reads the payload rather than only the status code:
 
 ```bash
-UPTIME_WEBHOOK_URL=https://hooks.slack.com/... npm run uptime -- https://ekmool.com
+UPTIME_WEBHOOK_URL=https://hooks.slack.com/... pnpm --filter web uptime https://ekmool.com
 ```
 
 Three rules it works to. **`ok` is the page, not the dependencies** — the
@@ -358,7 +367,7 @@ people learn to distrust the alarm.
   to install the site from the address bar
 - `https://ekmool.com/sitemap.xml` lists 18 URLs with the right origin (if
   they say `localhost`, `NEXT_PUBLIC_APP_URL` is wrong)
-- `npm run audit` against the deployed origin
+- `pnpm --filter web run audit` against the deployed origin
 - Place one real Cash on Delivery order and confirm the row in `orders`
 - Submit the sitemap in Google Search Console
 
@@ -370,8 +379,9 @@ rebuild.
 VPS: `pm2 reload` against the previous release directory. Keep the last two
 builds on disk so this is a symlink swap rather than a rebuild under pressure.
 
-**Database migrations are not automatically reversible.** `scripts/db-migrate.mts`
-tracks applied files in a `_migrations` table and only ever moves forward.
+**Database migrations are not automatically reversible.**
+`apps/web/scripts/db-migrate.mts` tracks applied files in a `_migrations`
+table and only ever moves forward.
 Before shipping a migration that drops or narrows a column, take a dump:
 
 ```bash

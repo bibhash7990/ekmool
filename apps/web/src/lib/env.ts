@@ -86,6 +86,26 @@ export const dbSsl: boolean = /^(1|true|yes)$/i.test(
  * async read through every caller of getPool for no gain.
  */
 function readCaFile(): string {
+  // cwd, deliberately, and the file moved to keep that true.
+  //
+  // ca.pem used to sit at the repository root, which was also cwd. The
+  // monorepo conversion made cwd `apps/web` — on Vercel, in the standalone
+  // image, and under `pnpm --filter web` — so the certificate moved to
+  // apps/web/ca.pem and the relationship is exactly what it was: the file
+  // sits at the app root, and the app root is cwd.
+  //
+  // It also has to live inside apps/web because that is Vercel's configured
+  // Root Directory. A copy at the repository root would depend on "include
+  // files outside root directory" staying on, which is a setting, not a
+  // property of the repo.
+  //
+  // Resolving from import.meta.dirname would be more robust in plain Node
+  // and is wrong here: this module is bundled by Next, which does not
+  // guarantee import.meta survives the transform.
+  //
+  // A miss is quiet. readCaFile returns "" and the DATABASE_SSL_CA fallback
+  // below takes over, so the failure does not appear here — it appears as a
+  // handshake error somewhere further down.
   try {
     return readFileSync(join(process.cwd(), "ca.pem"), "utf8").trim();
   } catch {

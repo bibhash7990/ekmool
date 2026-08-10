@@ -97,7 +97,12 @@ export const options = {
 export function handleSummary(data) {
   const label = MODE === "vus" ? `vus${VUS}` : `rps${RPS}`;
   return {
-    [`research/loadtest/browse-${label}.json`]: JSON.stringify(data, null, 2),
+    // Relative to k6's working directory, which both orchestrators
+    // (scripts/loadtest.mjs and scripts/chaos.mjs) pin to apps/web. research/
+    // stayed at the repository root in the monorepo move — docs/loadtest.md
+    // names research/loadtest/ and .gitignore ignores the JSON there — so
+    // this climbs back out of apps/web to reach it.
+    [`../../research/loadtest/browse-${label}.json`]: JSON.stringify(data, null, 2),
     stdout: summarise(data),
   };
 }

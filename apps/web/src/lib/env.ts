@@ -232,6 +232,58 @@ export const hasPosthog: boolean = looksReal(
   "phc_",
 );
 
+/* ---------- Mobile clients (GET /api/v1/bootstrap) ---------- */
+
+/**
+ * The oldest native build the server will still answer correctly.
+ *
+ * Served by `/api/v1/bootstrap`; a client below it shows a plain "this
+ * version is out of date, please update" screen and stops. It exists because
+ * without it the only remedy for a client that a server change has made
+ * wrong is to wait for people to update on their own, which they do not.
+ *
+ * **It must never be used to force an update for a reason that is not a
+ * correctness one.** A minimum-version wall is a serious thing to point at a
+ * customer holding a phone: it takes a working app away until they are on a
+ * connection and have the storage to replace it. Raise it when an old build
+ * would place a wrong order, and for nothing else — not for a redesign, not
+ * to retire a screen, not to move analytics.
+ *
+ * Default 1, which walls off nobody: builds start at 1, so an unconfigured
+ * server admits every client that exists.
+ */
+export const minClientBuild: number = positiveInt(
+  str(process.env.MOBILE_MIN_CLIENT_BUILD),
+  1,
+);
+
+/**
+ * What that screen says, or "" to let the app use its own wording.
+ *
+ * Server-side rather than in the app bundle for the obvious reason: the one
+ * thing you cannot ship to a client too old to be allowed to run is a new
+ * string. Empty is sent to the client as null, not as an empty message.
+ */
+export const olderClientMessage: string = str(
+  process.env.MOBILE_MIN_CLIENT_MESSAGE,
+);
+
+/**
+ * A whole positive integer, or the default.
+ *
+ * Deliberately a full-string match rather than `parseInt`, which reads
+ * `"12abc"` as 12 and `"1e3"` as 1 — a typo would then half-apply instead of
+ * being rejected. And deliberately never NaN: `NaN < minClientBuild` and
+ * `NaN >= minClientBuild` are both false, so a malformed value would not
+ * make the wall strict or lax, it would silently switch it off in a way no
+ * log line records.
+ */
+function positiveInt(raw: string, fallback: number): number {
+  if (!/^\d+$/.test(raw)) return fallback;
+  const value = Number(raw);
+  return Number.isSafeInteger(value) && value >= 1 ? value : fallback;
+}
+
 /* ---------- Seller identity (tax invoices) ---------- */
 
 /**

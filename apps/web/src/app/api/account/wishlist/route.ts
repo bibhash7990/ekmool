@@ -40,11 +40,18 @@ const mergeSchema = z.object({
  */
 const replaceSchema = z.object({ slugs: z.array(SLUG).max(100) });
 
-/** Resolves the session to a customer row, or the response to send back. */
-async function resolveCustomerId(): Promise<
-  { id: number } | { response: NextResponse }
-> {
-  const email = await getCustomerEmail();
+/**
+ * Resolves the session to a customer row, or the response to send back.
+ *
+ * Takes the request headers so the session may arrive as a bearer token as
+ * well as a cookie — a native client has no cookie jar. Everything else is
+ * unchanged: the email still comes from a signature the server made, never
+ * from the body.
+ */
+async function resolveCustomerId(
+  headers: Headers,
+): Promise<{ id: number } | { response: NextResponse }> {
+  const email = await getCustomerEmail(headers);
   if (!email) {
     return {
       response: NextResponse.json(
@@ -96,9 +103,9 @@ function failure(error: unknown): NextResponse {
   );
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const resolved = await resolveCustomerId();
+    const resolved = await resolveCustomerId(request.headers);
     if ("response" in resolved) return resolved.response;
 
     return NextResponse.json(
@@ -130,7 +137,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const resolved = await resolveCustomerId();
+    const resolved = await resolveCustomerId(request.headers);
     if ("response" in resolved) return resolved.response;
 
     return NextResponse.json(
@@ -162,7 +169,7 @@ export async function PUT(request: Request) {
   }
 
   try {
-    const resolved = await resolveCustomerId();
+    const resolved = await resolveCustomerId(request.headers);
     if ("response" in resolved) return resolved.response;
 
     return NextResponse.json(

@@ -51,6 +51,7 @@
         "DATABASE_*",
         "GRIEVANCE_OFFICER_*",
         "MAIL_FROM",
+        "MOBILE_*",
         "NEXT_PUBLIC_*",
         "NEXT_RUNTIME",
         "NODE_ENV",

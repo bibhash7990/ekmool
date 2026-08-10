@@ -123,6 +123,27 @@ console.log("1. MySQL dies during a browse load");
   const catalog = await fetch(`${base}/products`);
   check("catalogue still returns 200", catalog.status === 200, `got ${catalog.status}`);
 
+  // The phone reads its catalogue from these three, and they are static
+  // output for exactly the reason this test exists. Checked here as well as
+  // in test:db-down because this is the harder version — the database is
+  // pulled out from under live traffic rather than stopped beforehand, so a
+  // document that is only accidentally static (say, one that reads MySQL on
+  // a cache miss) fails here and passes there.
+  for (const path of [
+    "/catalog/v1.json",
+    "/catalog/reviews-v1.json",
+    "/catalog/content-v1.json",
+  ]) {
+    const response = await fetch(`${base}${path}`);
+    check(`${path} still returns 200`, response.status === 200, `got ${response.status}`);
+  }
+  const document_ = await (await fetch(`${base}/catalog/v1.json`)).json();
+  check(
+    "the mobile catalogue still has all five products",
+    Array.isArray(document_.products) && document_.products.length === 5,
+    `${document_.products?.length} products`,
+  );
+
   console.log("  ...restarting MySQL");
   docker("start", container);
 

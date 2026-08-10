@@ -18,6 +18,13 @@ import { appUrl } from "@/lib/env";
  * The cookie is signed, not encrypted. It contains an email address the
  * holder already knew, so there is nothing to hide; what matters is that it
  * cannot be forged, which the HMAC gives us.
+ *
+ * Which is also why the same token can be handed to a client that has no
+ * cookie jar. `POST /api/v1/session` takes the identical proof and returns
+ * the identical token in a JSON body, for a phone to keep in its keystore
+ * and send as `Authorization: Bearer …`; `resolveSession` reads either
+ * door. There is one token format, one secret and one expiry rule, and the
+ * transport is the only thing that differs.
  */
 
 export const SESSION_COOKIE = "ek_session";
@@ -121,6 +128,51 @@ export function verifySession(token: string | undefined, now = Date.now()): Sess
 export async function getSession(): Promise<Session | null> {
   const store = await cookies();
   return verifySession(store.get(SESSION_COOKIE)?.value);
+}
+
+/**
+ * The bearer token from an Authorization header, or undefined.
+ *
+ * The scheme is matched case-insensitively because RFC 7235 says it is
+ * case-insensitive, and an HTTP client library that title-cases or
+ * lower-cases it on the way out is not misbehaving. The token itself is
+ * returned untouched — it is base64url and hex, and trimming anything off
+ * the inside of it would break a signature rather than repair one.
+ */
+export function bearerToken(headers: Headers): string | undefined {
+  const header = headers.get("authorization");
+  if (!header) return undefined;
+  const match = /^Bearer[ \t]+(\S+)[ \t]*$/i.exec(header.trim());
+  return match?.[1];
+}
+
+/**
+ * The signed-in customer, from either door.
+ *
+ * A browser sends the httpOnly cookie. A native client has no cookie jar
+ * worth relying on, so it sends the same signed token as a bearer header
+ * and holds it in the platform keystore. Both verify through
+ * `verifySession`: there is one signature, one secret and one expiry rule,
+ * and deliberately no second token format — a second format would mean a
+ * second place for the expiry rule to be wrong.
+ *
+ * `headers` is optional so that this is a safe rename of `getSession()`
+ * rather than a behaviour change. Called with no argument — which is what
+ * every server component does — it reads the cookie and nothing else, so no
+ * existing call site changes meaning by adopting it.
+ *
+ * A bearer token that fails verification falls through to the cookie rather
+ * than refusing outright. That keeps a browser sending some unrelated
+ * Authorization header (a proxy, a debugging tool) working exactly as it
+ * does today; a native client has no cookie to fall back to, so it gets the
+ * 401 its expired token earned either way.
+ */
+export async function resolveSession(headers?: Headers): Promise<Session | null> {
+  if (headers) {
+    const session = verifySession(bearerToken(headers));
+    if (session) return session;
+  }
+  return getSession();
 }
 
 function cookieOptions() {

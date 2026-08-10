@@ -47,6 +47,14 @@ const PATHS = [
   { path: "/blog/lakadong-vs-kandhamal-turmeric", weight: 3 },
   { path: "/about", weight: 2 },
   { path: "/faq", weight: 2 },
+  /* The mobile catalogue. Weighted at 6 rather than higher because a phone
+     fetches it once and then revalidates against its ETag — this is the
+     cold-open share, not the request share. It is in the mix at all so that
+     `chaos` pulls MySQL out from under it along with everything else: a
+     document that is only accidentally static fails there and nowhere. */
+  { path: "/catalog/v1.json", weight: 4 },
+  { path: "/catalog/reviews-v1.json", weight: 1 },
+  { path: "/catalog/content-v1.json", weight: 1 },
 ];
 
 /* Expand the weights once at init time so each iteration is a single
@@ -136,7 +144,9 @@ export default function () {
   const response = http.get(`${BASE}${path}`, {
     tags: { name: path },
     headers: {
-      accept: "text/html",
+      // The catalogue documents are fetched by a phone, not a browser, and
+      // sending text/html for them would measure a request no client makes.
+      accept: path.endsWith(".json") ? "application/json" : "text/html",
       // Every real browser sends this, and it changes the test by more than
       // you would guess: a product page is 82 KB raw and 14.8 KB gzipped.
       // Omitting it measures the server shipping 5.5x the bytes it would

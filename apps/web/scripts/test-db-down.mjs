@@ -46,7 +46,38 @@ for (const path of BROWSE_PATHS) {
   check(`${path} → 200`, response.status === 200, `got ${response.status}`);
 }
 
-console.log("\n2. Product content is really there (not an empty shell)");
+console.log("\n2. The mobile catalogue documents are unaffected");
+{
+  // The whole of Phase 2 in three assertions. The app reads the catalogue
+  // from these documents, and they are prerendered static output for
+  // exactly this reason: an endpoint that queried MySQL to serve a product
+  // list would make the phone the FIRST thing to fail in an outage, and it
+  // would do it while the website beside it stayed up.
+  for (const path of [
+    "/catalog/v1.json",
+    "/catalog/reviews-v1.json",
+    "/catalog/content-v1.json",
+  ]) {
+    const response = await fetch(`${base}${path}`);
+    check(`${path} → 200`, response.status === 200, `got ${response.status}`);
+    check(
+      `${path} still carries an ETag`,
+      Boolean(response.headers.get("etag")),
+    );
+  }
+
+  // Not an empty shell, for the same reason section 3 checks the HTML: a
+  // route that answers 200 with `{"products":[]}` has failed in the way
+  // that matters and passed the status check.
+  const doc = await (await fetch(`${base}/catalog/v1.json`)).json();
+  check(
+    "the catalogue document still has all five products",
+    Array.isArray(doc.products) && doc.products.length === 5,
+    `${doc.products?.length} products`,
+  );
+}
+
+console.log("\n3. Product content is really there (not an empty shell)");
 {
   const html = await (
     await fetch(`${base}/products/lakadong-turmeric-powder`)
@@ -56,7 +87,7 @@ console.log("\n2. Product content is really there (not an empty shell)");
   check("Product JSON-LD survives", html.includes('"@type":"Product"'));
 }
 
-console.log("\n3. Checkout fails gracefully (503, not a crash)");
+console.log("\n4. Checkout fails gracefully (503, not a crash)");
 {
   const response = await fetch(`${base}/api/checkout`, {
     method: "POST",
@@ -93,14 +124,14 @@ console.log("\n3. Checkout fails gracefully (503, not a crash)");
   );
 }
 
-console.log("\n4. Health endpoint reports the dependency honestly");
+console.log("\n5. Health endpoint reports the dependency honestly");
 {
   const data = await (await fetch(`${base}/api/health`)).json();
   check("ok stays true (the app is alive)", data.ok === true);
   check("db reports down", data.db === "down", JSON.stringify(data));
 }
 
-console.log("\n5. No crash loop — the server still answers after the failures");
+console.log("\n6. No crash loop — the server still answers after the failures");
 {
   const response = await fetch(`${base}/`);
   check("home still 200 after repeated DB errors", response.status === 200);

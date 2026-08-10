@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/session";
+import { resolveSession } from "@/lib/session";
 import { getCustomerByEmail, getDefaultAddress } from "@/db/queries/customers";
 
 export const runtime = "nodejs";
@@ -17,8 +17,10 @@ export const dynamic = "force-dynamic";
  * session or no saved address — the caller wants to know "is there one",
  * and an error status for the ordinary case is noise in the console.
  */
-export async function GET() {
-  const session = await getSession();
+export async function GET(request: Request) {
+  // Either door: the cookie a browser holds, or the same signed token in an
+  // Authorization header from a client that has nowhere to keep a cookie.
+  const session = await resolveSession(request.headers);
   const empty = NextResponse.json(
     { address: null },
     { headers: { "cache-control": "no-store" } },

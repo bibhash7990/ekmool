@@ -25,6 +25,7 @@
     "test:promotions": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/test-promotions.mjs",
     "test:db-down": "node scripts/test-db-down.mjs",
     "test:jobs": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/test-jobs.mjs",
+    "test:mobile-api": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/test-mobile-api.mjs",
     "test:offline": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/test-offline.mjs",
     "backup": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --conditions react-server --import ./scripts/register-alias.mjs scripts/backup.mjs",
     "uptime": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/uptime.mjs",

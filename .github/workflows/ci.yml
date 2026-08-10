@@ -186,6 +186,15 @@ jobs:
       - name: Promotions
         run: pnpm --filter web test:promotions 3100
 
+      # Late in the order on purpose. It spends a whole 5/min lookup bucket
+      # proving the install-id fairness fix, and it edits a variant price to
+      # prove the catalogue and reviews tags are separate — it puts the price
+      # back, but a suite that reads prices should not be running while it
+      # does. test:home, which asserts home prices match the database, runs
+      # near the top for the same reason.
+      - name: Mobile API
+        run: pnpm --filter web test:mobile-api 3100
+
       - name: Jobs
         run: pnpm --filter web test:jobs 3100
 

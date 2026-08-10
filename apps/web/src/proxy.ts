@@ -1,6 +1,15 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
-import { rateLimiter, limitsFor, clientIp } from "@/lib/rate-limit";
+import {
+  rateLimiter,
+  limitsFor,
+  clientIp,
+  readInstallId,
+  dualLimitsFor,
+  installBucketKey,
+  looseIpBucketKey,
+  type RateLimitResult,
+} from "@/lib/rate-limit";
 import { hasClerk } from "@/lib/env";
 
 /**
@@ -36,9 +45,63 @@ async function applyRateLimit(
     return null;
   }
 
-  const { limit, windowMs } = limitsFor(pathname);
-  const key = `${clientIp(request.headers)}:${limit}`;
-  const result = await rateLimiter.check(key, limit, windowMs);
+  const ip = clientIp(request.headers);
+
+  // The install id is a fairness mechanism and not a credential — see the
+  // comment on readInstallId. A request without a well-formed one takes the
+  // branch below unchanged, down to the bucket key, because every existing
+  // limit assertion in test:consent and test:account is written against it.
+  const installId = readInstallId(request.headers);
+  const dual = installId ? dualLimitsFor(pathname) : null;
+
+  const { limit, windowMs } = dual ? dual.install : limitsFor(pathname);
+
+  let result: RateLimitResult;
+
+  if (dual && installId) {
+    // Both, in parallel, and refused if either refuses.
+    //
+    // Parallel rather than sequential: on the allowed path both buckets are
+    // consumed regardless, so short-circuiting would save a round trip only
+    // when a request is already being refused, while costing every honest
+    // request a second serialised hop to Upstash.
+    //
+    // A consequence worth stating: when one bucket allows and the other
+    // refuses, the allowing bucket has still spent a token. Reserving in one
+    // bucket and rolling back on the other's refusal would need a two-phase
+    // commit across two Redis keys to fix an over-charge of at most one
+    // token, on a request that is being refused anyway.
+    const [byInstall, byIp] = await Promise.all([
+      rateLimiter.check(
+        installBucketKey(installId, dual.install.limit),
+        dual.install.limit,
+        dual.install.windowMs,
+      ),
+      rateLimiter.check(
+        // `${ip}:${limit}` when the route is not loosening its IP bucket, so
+        // it is the same bucket a browser uses rather than a second one of
+        // the same size beside it — which would have doubled the limit it
+        // means to leave alone. See DualBucketPlan.loosenIp.
+        dual.loosenIp
+          ? looseIpBucketKey(ip, dual.ip.limit)
+          : `${ip}:${dual.ip.limit}`,
+        dual.ip.limit,
+        dual.ip.windowMs,
+      ),
+    ]);
+
+    // Report the tighter of the two remainders, so a client pacing itself
+    // against the header paces against the bucket that will actually stop
+    // it. `limit` above is the per-install one for the same reason: it is
+    // the number a single well-behaved install can plan around.
+    result = {
+      allowed: byInstall.allowed && byIp.allowed,
+      retryAfter: Math.max(byInstall.retryAfter, byIp.retryAfter),
+      remaining: Math.min(byInstall.remaining, byIp.remaining),
+    };
+  } else {
+    result = await rateLimiter.check(`${ip}:${limit}`, limit, windowMs);
+  }
 
   if (!result.allowed) {
     return NextResponse.json(

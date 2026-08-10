@@ -12,8 +12,9 @@ export const dynamic = "force-dynamic";
  *
  * Two guards, both deliberate:
  *
- *  1. **The session, not a parameter.** The address erased is the one in the
- *     cookie. There is nothing in the request body naming a victim.
+ *  1. **The session, not a parameter.** The address erased is the one the
+ *     server itself signed — in the cookie, or in the bearer token a native
+ *     client sends. There is nothing in the request body naming a victim.
  *  2. **Typed confirmation.** The body must carry the exact word ERASE. A
  *     single mis-click cannot destroy someone's account, and unlike a
  *     confirm dialog this survives a replayed request.
@@ -25,7 +26,7 @@ export const dynamic = "force-dynamic";
  * still there would be the actual violation.
  */
 export async function POST(request: NextRequest) {
-  const email = await getCustomerEmail();
+  const email = await getCustomerEmail(request.headers);
   if (!email) {
     return NextResponse.json(
       { error: "Sign in at /track first.", code: "NOT_SIGNED_IN" },
@@ -66,6 +67,14 @@ export async function POST(request: NextRequest) {
 
     // The session named an address that no longer exists. Leaving the
     // cookie set would strand them on a page that redirects for ever.
+    //
+    // A bearer token cannot be withdrawn the same way — it is stateless, so
+    // there is no cookie to overwrite and no server-side record to revoke.
+    // It stays verifiable until it expires, but it now names an address
+    // with no customer row behind it, which every account route already
+    // treats as "not signed in" (see resolveCustomerId in the wishlist
+    // handler, and AccountContext.customer being nullable). The client's
+    // part of erasure is deleting the keystore entry.
     clearSession(response);
     return response;
   } catch (error) {

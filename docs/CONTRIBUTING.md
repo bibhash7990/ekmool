@@ -133,8 +133,9 @@ Every one of these is a web-app script, so the command is
 | `test:home` | Home prices match the database, shipping terms match the constants, reviews appear only when real |
 | `test:offline` | Service worker exclusions, manifest, PWA CSP, shared limiter |
 | `test:jobs` | Cron auth, stale-order cancel, reminder dedupe |
+| `test:mobile-api` | Catalogue documents stay static, catalogue and review tags stay separate, bearer sessions, install-id fairness |
 | `chaos` | MySQL killed under live traffic |
-| `test:db-down` | Browsing with MySQL stopped |
+| `test:db-down` | Browsing with MySQL stopped, **including the three catalogue documents** |
 | `validate:schema` | Titles, canonicals, JSON-LD, internal links |
 
 Most need a running server (`pnpm --filter web standalone:start`).
@@ -144,6 +145,12 @@ hard-purging the catalogue tag, and an expired static page with no database
 has nothing to serve. Since M16 the home page reads the catalogue too, so it is in that
 set: `/`, `/products` and `/sitemap.xml` are the three pages a hard purge
 takes offline for the length of an outage.
+
+Run `test:mobile-api` late. It spends a whole 5/min lookup bucket proving
+that two install ids behind one address do not take each other's tokens,
+and it edits a variant price to prove that purging the catalogue does not
+purge the reviews document. It puts the price back, but nothing that reads
+prices should be running while it has not yet.
 
 Run `test:home` before anything that publishes a review. Its empty-state
 check — that no review section renders at all when none exist — can only

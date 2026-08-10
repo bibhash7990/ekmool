@@ -5,7 +5,7 @@ import {
   RETURN_REASONS,
   type ReturnRefusal,
 } from "@/db/queries/returns";
-import { getSession } from "@/lib/session";
+import { resolveSession } from "@/lib/session";
 import { DbUnconfiguredError } from "@/db/pool";
 
 export const runtime = "nodejs";
@@ -57,7 +57,7 @@ export async function POST(
 
   // Same rule as cancellation: reading an order needs only the link, but
   // acting on one needs a session whose email matches it.
-  const session = await getSession();
+  const session = await resolveSession(request.headers);
   if (!session) {
     return NextResponse.json(
       {

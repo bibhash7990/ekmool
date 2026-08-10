@@ -223,11 +223,57 @@ async function loadProductReviews(
  * Cached and tagged, so a product page stays static and browsing still
  * never touches MySQL. Publishing a review purges the tag.
  */
-export const getProductReviews = unstable_cache(
+const cachedProductReviews = unstable_cache(
   loadProductReviews,
   ["product-reviews"],
   { tags: [REVIEWS_TAG], revalidate: REVALIDATE_SECONDS },
 );
+
+/**
+ * The cached read, with its dates put back.
+ *
+ * `unstable_cache` stores its result as `JSON.stringify(result)` and returns
+ * `JSON.parse(...)` on a hit — see `cacheNewResult` in
+ * `next/dist/server/web/spec-extension/unstable-cache.js`. So a cache **miss**
+ * hands back the live `Date` mysql2 built and a **hit** hands back the ISO
+ * string it was serialised to, while the declared type says `Date` in both
+ * cases. Every caller that formats it — `ProductReviews.tsx`, the
+ * `datePublished` in the product page's JSON-LD — typechecks and then throws
+ * "createdAt.toISOString is not a function" on the warm path.
+ *
+ * It has never been seen because nothing has been published yet: the empty
+ * catalogue of reviews means the branch that formats one has not run in
+ * production. It would have appeared roughly an hour after the first review
+ * went live, on whichever request happened to regenerate the page against a
+ * still-valid cache entry — which is the worst possible way to find it.
+ *
+ * Reviving here rather than widening `Review.createdAt` to `Date | string`:
+ * the wide type is more honest about the wire but pushes a narrowing onto
+ * eight call sites that are correct today, and the type they assume is the
+ * type this function now actually returns.
+ */
+export async function getProductReviews(
+  productSlug: string,
+  limit?: number,
+): Promise<ProductReviews> {
+  const cached = await cachedProductReviews(productSlug, limit);
+  return {
+    rating: cached.rating,
+    reviews: cached.reviews.map(reviveReviewDate),
+  };
+}
+
+/**
+ * `new Date(value)` only when it is not already one.
+ *
+ * Not `new Date(String(value))` unconditionally: that would round-trip a
+ * live Date through a string on every cache miss, and MySQL DATETIME has
+ * second precision while the round trip is lossless only by luck.
+ */
+function reviveReviewDate<T extends { createdAt: Date }>(review: T): T {
+  const raw: Date | string = review.createdAt;
+  return raw instanceof Date ? review : { ...review, createdAt: new Date(raw) };
+}
 
 /* ------------------------------------------------------------------ */
 /* The home page                                                       */
@@ -284,11 +330,25 @@ async function loadRecentReviews(limit = 3): Promise<RecentReview[]> {
   }));
 }
 
-export const getRecentReviews = unstable_cache(
+const cachedRecentReviews = unstable_cache(
   loadRecentReviews,
   ["recent-reviews"],
   { tags: [REVIEWS_TAG], revalidate: REVALIDATE_SECONDS },
 );
+
+/**
+ * Same revival as `getProductReviews` above, and for the same reason —
+ * `HomeReviews.tsx` calls both `createdAt.toISOString()` and
+ * `DATE_FORMAT.format(createdAt)` on this, and the second throws
+ * "Invalid time value" on a string rather than failing usefully.
+ *
+ * The home page is the worst place in the site for this to surface, which is
+ * why both readers are fixed together rather than only the one the mobile
+ * catalogue happened to touch.
+ */
+export async function getRecentReviews(limit?: number): Promise<RecentReview[]> {
+  return (await cachedRecentReviews(limit)).map(reviveReviewDate);
+}
 
 /* ------------------------------------------------------------------ */
 /* Moderation                                                          */

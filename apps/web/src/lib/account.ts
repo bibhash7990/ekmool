@@ -1,20 +1,29 @@
 import "server-only";
 import { redirect } from "next/navigation";
-import { getSession } from "@/lib/session";
+import { resolveSession } from "@/lib/session";
 import { hasClerk } from "@/lib/env";
 import { getCustomerByEmail, type Customer } from "@/db/queries/customers";
 
 /**
  * Who is looking at the account area.
  *
- * Two doors, one room. The /track session cookie is the primary one and
- * works with no third-party service at all. Clerk, when it happens to be
- * configured, is accepted as a second — a Clerk account's verified email
- * identifies exactly the same customer, because customers are keyed on
- * email. Neither is required for anything else on the site.
+ * Two doors, one room. The /track session is the primary one and works with
+ * no third-party service at all. Clerk, when it happens to be configured,
+ * is accepted as a second — a Clerk account's verified email identifies
+ * exactly the same customer, because customers are keyed on email. Neither
+ * is required for anything else on the site.
+ *
+ * The /track session arrives either as the httpOnly cookie a browser holds
+ * or as the same signed token in an Authorization header, which is what a
+ * native client sends. `resolveSession` reads both; pass `request.headers`
+ * from a route handler to open that door, and pass nothing from a server
+ * component, where there is no bearer header to read and behaviour is
+ * unchanged. This function is the single identity funnel for the account
+ * area — wishlist, addresses, export and erasure all come through here — so
+ * one optional parameter is what admits the phone to all of them.
  */
-export async function getCustomerEmail(): Promise<string | null> {
-  const session = await getSession();
+export async function getCustomerEmail(headers?: Headers): Promise<string | null> {
+  const session = await resolveSession(headers);
   if (session) return session.email;
 
   if (!hasClerk) return null;

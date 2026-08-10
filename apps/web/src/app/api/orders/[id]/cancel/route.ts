@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { cancelOrderByCustomer, type CancelRefusal } from "@/db/queries/orders";
-import { getSession } from "@/lib/session";
+import { resolveSession } from "@/lib/session";
 import { DbUnconfiguredError } from "@/db/pool";
 
 export const runtime = "nodejs";
@@ -38,7 +38,7 @@ const REFUSALS: Record<CancelRefusal, { status: number; message: string }> = {
 };
 
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
@@ -50,7 +50,7 @@ export async function POST(
     );
   }
 
-  const session = await getSession();
+  const session = await resolveSession(request.headers);
   if (!session) {
     return NextResponse.json(
       {

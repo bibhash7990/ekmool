@@ -8,12 +8,17 @@
     "./checkout": "./src/checkout.ts",
     "./account": "./src/account.ts",
     "./errors": "./src/errors.ts",
-    "./responses": "./src/responses.ts"
+    "./responses": "./src/responses.ts",
+    "./headers": "./src/headers.ts",
+    "./documents": "./src/documents.ts",
+    "./session": "./src/session.ts",
+    "./bootstrap": "./src/bootstrap.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@ekmool/core": "workspace:*",
     "zod": "^4.4.3"
   }
 }

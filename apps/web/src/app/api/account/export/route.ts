@@ -18,8 +18,8 @@ export const dynamic = "force-dynamic";
  * tamper with, which is the only reliable way to make sure one person
  * cannot request another's file.
  */
-export async function GET() {
-  const email = await getCustomerEmail();
+export async function GET(request: Request) {
+  const email = await getCustomerEmail(request.headers);
   if (!email) {
     return NextResponse.json(
       { error: "Sign in at /track first.", code: "NOT_SIGNED_IN" },

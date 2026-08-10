@@ -28,12 +28,27 @@ wrong row is the most expensive mistake available here.
 | Route | Strategy | Touches MySQL at request time? |
 |---|---|---|
 | `/`, `/products`, `/blog/*`, all policy pages | Static, `revalidate = 3600` | **No** |
+| `/catalog/v1.json`, `/catalog/reviews-v1.json`, `/catalog/content-v1.json` | Static, `revalidate = 3600` | **No** |
 | `/products/[slug]` | SSG + `dynamicParams = true` | **No** for the five prebuilt slugs |
 | `/search`, `/wishlist`, `/track` | Dynamic | No — search runs over the cached catalogue |
 | `/cart`, `/checkout` | Static shell, client cart | No |
 | `/orders/[id]`, `/account/*` | Dynamic, session-scoped | Yes |
 | `/admin/*` | Dynamic, `force-dynamic` | Yes |
 | `/api/*` | Route handlers | Yes, where relevant |
+
+The three `/catalog/…-v1.json` documents are the mobile app's catalogue, and
+they are in **row one on purpose**. They are not under `/api` for three
+reasons: `src/proxy.ts`'s matcher is `/api/:path*`, so filing them there
+would make every catalogue fetch pay for a Node hop and a rate-limit check
+to serve a file that does not change between purges; the table you are
+reading sorts routes by what they touch at request time, and `/api/*` is
+the row a future reader assumes is dynamic; and rate-limiting a file served
+from disk is theatre — what it needs is a CDN. They reuse `getCatalog`,
+`getProductReviews` and `getContent` rather than a leaner query written for
+the phone, so `revalidateCatalog()` / `revalidateReviews()` /
+`revalidateContent()` already purge them and there is **no new invalidation
+story**. Three documents rather than one, for the same reason the two tags
+below are separate.
 
 **Why it matters.** `apps/web/scripts/chaos.mjs` stops MySQL under live
 traffic and asserts that browsing keeps serving 200s. That property is not

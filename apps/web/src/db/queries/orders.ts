@@ -14,10 +14,7 @@ import {
   formatInvoiceNumber,
 } from "@ekmool/core/gst";
 import type { CheckoutInput } from "@ekmool/contracts/checkout";
-import {
-  FLAT_SHIPPING_PAISE,
-  FREE_SHIPPING_THRESHOLD_PAISE,
-} from "@/lib/constants";
+import { shippingFor } from "@ekmool/core/shipping";
 
 export type { OrderStatus, PaymentStatus } from "@/lib/order-status";
 import type { OrderStatus, PaymentStatus } from "@/lib/order-status";
@@ -110,11 +107,13 @@ export class CouponRefusedError extends Error {
   }
 }
 
-export function shippingFor(subtotalPaise: number): number {
-  return subtotalPaise >= FREE_SHIPPING_THRESHOLD_PAISE
-    ? 0
-    : FLAT_SHIPPING_PAISE;
-}
+/**
+ * Re-exported, not redefined. The rule lives in `@ekmool/core/shipping` so
+ * the phone applies exactly the arithmetic this transaction will, and the
+ * two cannot drift. The authority is still here: whatever a client shows,
+ * the total charged is recomputed below from locked rows.
+ */
+export { shippingFor };
 
 interface VariantPriceRow extends RowDataPacket {
   id: number;

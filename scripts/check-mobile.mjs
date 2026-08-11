@@ -1,5 +1,5 @@
 /**
- * Four properties of apps/mobile that nothing else enforces.
+ * Five properties of apps/mobile that nothing else enforces.
  *
  * Cheap greps rather than anything clever, deliberately — something crude
  * that runs in CI beats something elegant that does not. Same reasoning as
@@ -42,6 +42,38 @@
  *      to be literals. That makes them the one place where a token and a
  *      literal can drift, and the symptom is a first frame in the wrong
  *      colour before React mounts, which nobody reports as a bug.
+ *
+ *   5. Rule 5: a product nobody has reviewed shows no rating at all.
+ *
+ *      "Never fabricate social proof. No seeded reviews, no invented
+ *      ratings... A product nobody has reviewed shows no rating at all — not
+ *      a zero." The web asserts both directions of exactly this in
+ *      `test:home`. There is no Lighthouse and no DOM here to assert against,
+ *      so the phone's version is structural: the single component that may
+ *      render a rating must refuse before it renders, and no other file may
+ *      draw the marks.
+ *
+ *      Five sub-assertions, and each was negative-tested by planting the
+ *      violation and watching this check go red:
+ *
+ *        a. src/components/reviews/ProductRating.tsx exists.
+ *        b. Its `if (…) return null` precedes its first JSX `return (`. A
+ *           gate placed after the render is not a gate.
+ *        c. No zero-rating fallback (`?? 0`, `|| 0`, `average: 0`) anywhere
+ *           in app/ or src/. A default of zero IS the invented rating.
+ *        d. None of the forbidden empty-state phrases in app/ or src/ —
+ *           "be the first", "no reviews yet", "0.0 out of". Rule 5 covers
+ *           the *shape* of proof as well as the substance: a heading over
+ *           grey marks claims a product has been ignored rather than that
+ *           it is new.
+ *        e. RatingMarks is imported only by the two components that gate it.
+ *           Otherwise a screen draws five marks and rule 5 lives in a file
+ *           nobody went through.
+ *
+ *      The positive direction — a product WITH reviews shows the real
+ *      figures — is covered by (a)+(b) requiring a JSX return that reads
+ *      `average` and `count`. A grep cannot render a component, so the rest
+ *      of that direction is a manual item: see the note printed on failure.
  *
  * Run: node scripts/check-mobile.mjs
  */
@@ -156,6 +188,38 @@ const show = (file) => relative(root, file).replace(/\\/g, "/");
   }
 }
 
+/* ---------------- 3b. Screens read documents through the wrappers ---- */
+{
+  // A screen calling `useCachedDocument` directly has to pass the cache key
+  // as a string, and four of them passed "catalog" and "content" while
+  // `CATALOG_DOCUMENT.cacheKey` says "catalog-v1". The app therefore kept
+  // **two copies** of the catalogue in kv-store, fetched it cold twice, and
+  // could show a price on the Shop tab that the cart disagreed with — none
+  // of which typechecks as wrong, because both arguments are strings.
+  //
+  // The wrappers (`useCatalog`, `useReviews`, `useContent`) take no
+  // arguments, so there is nothing to get wrong. This check keeps the hole
+  // closed rather than trusting the next person to notice a literal.
+  const screens = sourceFiles.filter((file) =>
+    file.startsWith(join(mobile, "app")),
+  );
+  const offenders = screens.filter((file) =>
+    /\buseCachedDocument\s*[<(]/.test(readFileSync(file, "utf8")),
+  );
+
+  if (offenders.length > 0) {
+    fail(
+      "a screen calls useCachedDocument directly:\n" +
+        offenders.map((f) => `          ${show(f)}`).join("\n") +
+        "\n\n        Use useCatalog() / useReviews() / useContent() from" +
+        "\n        src/hooks/useCachedDocument.ts. Passing the cache key by" +
+        "\n        hand is how the catalogue ended up cached twice.",
+    );
+  } else {
+    pass("screens read documents through the typed wrappers");
+  }
+}
+
 /* ---------------- 4. app.config.js agrees with the tokens ------------ */
 {
   const configPath = join(mobile, "app.config.js");
@@ -186,6 +250,112 @@ const show = (file) => relative(root, file).replace(/\\/g, "/");
       } else {
         pass(`app.config.js colours match the paper token (${paper})`);
       }
+    }
+  }
+}
+
+/* ---------------- 5. Rule 5: no rating on an unreviewed product ------ */
+{
+  const reviewsDir = join(srcDir, "components", "reviews");
+  const gatePath = join(reviewsDir, "ProductRating.tsx");
+  const marksPath = join(reviewsDir, "RatingMarks.tsx");
+  const listPath = join(reviewsDir, "ReviewList.tsx");
+
+  const rule5 = (detail) =>
+    fail(
+      `${detail}\n\n` +
+        "        Rule 5: a product nobody has reviewed shows no rating at all — not a\n" +
+        "        zero, not grey marks, not a heading over nothing. The gate is the\n" +
+        "        `return null` in src/components/reviews/ProductRating.tsx and it is\n" +
+        "        the only one; every surface that shows a rating mounts that component.\n" +
+        "        The web asserts both directions of this in `pnpm --filter web test:home`.",
+    );
+
+  // (a) the gate exists at all
+  if (!existsSync(gatePath)) {
+    rule5("src/components/reviews/ProductRating.tsx is missing");
+  } else {
+    const gate = readFileSync(gatePath, "utf8");
+
+    // (b) the refusal precedes the render
+    const guard = gate.search(/^[ \t]*if\s*\(.*\)\s*return null;[ \t]*$/m);
+    const render = gate.search(/^[ \t]*return\s*\(\s*$/m);
+
+    if (guard === -1) {
+      rule5("ProductRating.tsx has no `if (…) return null;` guard");
+    } else if (render === -1) {
+      rule5("ProductRating.tsx never returns JSX — nothing renders a real rating");
+    } else if (guard > render) {
+      rule5(
+        "ProductRating.tsx returns JSX before its `return null` guard —\n" +
+          "        a gate placed after the render is not a gate",
+      );
+    } else if (!/\baverage\b/.test(gate) || !/\bcount\b/.test(gate)) {
+      // The positive direction: with a rating, the real figures are shown.
+      rule5(
+        "ProductRating.tsx no longer reads both `average` and `count` —\n" +
+          "        the direction where a reviewed product DOES show its rating is gone",
+      );
+    } else {
+      pass("rule 5: ProductRating refuses before it renders");
+    }
+  }
+
+  // (c) + (d) no invented zero, no empty-state placeholder copy
+  const INVENTED_ZERO =
+    /(rating|average|count)\s*(\?\?|\|\|)\s*0\b|\b(average|rating)\s*:\s*0\b/i;
+  const FORBIDDEN_COPY =
+    /be the first|no reviews yet|no ratings yet|no rating yet|not yet rated|0\.0 out of|reviews coming soon|\b0 reviews\b/i;
+
+  const zeroOffenders = [];
+  const copyOffenders = [];
+
+  for (const file of sourceFiles) {
+    const lines = readFileSync(file, "utf8").split(/\r?\n/);
+    lines.forEach((line, i) => {
+      // Comments are skipped for the same reason check 2 skips them: the
+      // rule is quoted verbatim in several of these files, and a comment
+      // naming the thing it forbids is a comment doing its job.
+      const trimmed = line.trim();
+      if (trimmed.startsWith("*") || trimmed.startsWith("//") || trimmed.startsWith("/*")) {
+        return;
+      }
+      const where = `${show(file)}:${i + 1}  ${trimmed.slice(0, 72)}`;
+      if (INVENTED_ZERO.test(line)) zeroOffenders.push(where);
+      if (FORBIDDEN_COPY.test(line)) copyOffenders.push(where);
+    });
+  }
+
+  if (zeroOffenders.length > 0) {
+    rule5(
+      "a rating defaulting to zero:\n" +
+        zeroOffenders.map((o) => `          ${o}`).join("\n"),
+    );
+  } else if (copyOffenders.length > 0) {
+    rule5(
+      "empty-state copy that renders the shape of social proof:\n" +
+        copyOffenders.map((o) => `          ${o}`).join("\n"),
+    );
+  } else {
+    pass("rule 5: no invented zero and no placeholder review copy");
+  }
+
+  // (e) the marks are drawable only from behind the gate
+  if (existsSync(marksPath)) {
+    const allowed = new Set([gatePath, marksPath, listPath]);
+    const offenders = sourceFiles.filter(
+      (file) => !allowed.has(file) && /\bRatingMarks\b/.test(readFileSync(file, "utf8")),
+    );
+
+    if (offenders.length > 0) {
+      rule5(
+        "RatingMarks drawn outside the components that gate it:\n" +
+          offenders.map((f) => `          ${show(f)}`).join("\n") +
+          "\n\n        Mount ProductRating (a rating) or ReviewList (the reviews) instead." +
+          "\n        Both return null before they draw anything.",
+      );
+    } else {
+      pass("rule 5: RatingMarks is reachable only through the gate");
     }
   }
 }

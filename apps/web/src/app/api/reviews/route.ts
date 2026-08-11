@@ -58,7 +58,12 @@ export async function GET(request: Request) {
     );
   }
 
-  const email = await getCustomerEmail();
+  // `request.headers`, not nothing. Without it `resolveSession` skips the
+  // bearer branch and looks only in the cookie jar, which a phone does not
+  // have — so every native client was told NO_SESSION however good its
+  // token. Silent, because "you have not ordered this yet" is a plausible
+  // answer to see, and the web kept working throughout.
+  const email = await getCustomerEmail(request.headers);
   if (!email) {
     return NextResponse.json(
       { eligible: false, reason: "NO_SESSION" },
@@ -86,7 +91,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const email = await getCustomerEmail();
+  // See the GET above: the headers are what open the bearer door.
+  const email = await getCustomerEmail(request.headers);
   if (!email) {
     return NextResponse.json(
       {

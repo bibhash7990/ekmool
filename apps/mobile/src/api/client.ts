@@ -217,7 +217,19 @@ function requestSignal(
 /* Headers                                                             */
 
 export interface ApiRequestOptions {
-  method?: "GET" | "POST" | "PATCH" | "DELETE";
+  /**
+   * `PUT` is here for `PUT /api/account/wishlist`, which replaces the list
+   * rather than merging into it — the only way a removal reaches the
+   * account. Without it a slug taken off the list on the phone came back at
+   * the next merge, which looks like the app ignoring the customer.
+   *
+   * It is deliberately NOT added to the retry rule below. A PUT is
+   * idempotent by definition and could safely be retried, but the rule there
+   * is written as "the shape of the request, not the caller's intention",
+   * and widening it for a method nobody has needed to retry would trade a
+   * real guarantee for a hypothetical convenience.
+   */
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   /** Serialised as JSON. Omit for a GET. */
   body?: unknown;
   /**

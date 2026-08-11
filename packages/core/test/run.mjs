@@ -38,6 +38,12 @@ import {
   DISPATCH_DAYS,
   checkPincode,
 } from "../src/serviceability.ts";
+import {
+  FLAT_SHIPPING_PAISE,
+  FREE_SHIPPING_THRESHOLD_PAISE,
+  cartTotals,
+  shippingFor,
+} from "../src/shipping.ts";
 
 let passed = 0;
 const failures = [];
@@ -512,6 +518,79 @@ check(
       result.maxDays === DISPATCH_DAYS + result.zone.maxDays
     );
   }),
+);
+
+/* ------------------------------------------------------------------ */
+console.log("\nShipping — the cart arithmetic both clients show");
+
+equals(
+  "a ₹200 basket pays flat ₹49 delivery",
+  shippingFor(20_000),
+  FLAT_SHIPPING_PAISE,
+);
+equals(
+  "exactly ₹499 is free — the threshold is inclusive",
+  shippingFor(FREE_SHIPPING_THRESHOLD_PAISE),
+  0,
+);
+equals(
+  "a paisa under the threshold still pays",
+  shippingFor(FREE_SHIPPING_THRESHOLD_PAISE - 1),
+  FLAT_SHIPPING_PAISE,
+);
+
+// The ordering rule, and the reason it is a rule. A ₹520 basket has earned
+// free delivery; if a ₹50 discount were subtracted first the subtotal would
+// fall to ₹470 and delivery would come back, so a voucher promising ₹50 off
+// would hand back ₹49 of it. This assertion fails against that mistake,
+// which is the only kind of assertion worth writing here.
+equals(
+  "a coupon cannot take back free delivery already earned",
+  cartTotals(52_000, { discountPaise: 5_000 }),
+  {
+    subtotalPaise: 52_000,
+    discountPaise: 5_000,
+    shippingPaise: 0,
+    totalPaise: 47_000,
+    remainingForFreePaise: 0,
+  },
+);
+
+equals(
+  "a free-shipping coupon waives the charge on a small basket",
+  cartTotals(20_000, { shippingWaivedPaise: FLAT_SHIPPING_PAISE }),
+  {
+    subtotalPaise: 20_000,
+    discountPaise: 0,
+    shippingPaise: 0,
+    totalPaise: 20_000,
+    remainingForFreePaise: 29_900,
+  },
+);
+
+// Both floors, asserted rather than assumed. A waiver larger than the charge
+// would otherwise make shipping negative and pay the customer to receive a
+// parcel; a discount larger than the basket would produce a negative total.
+equals(
+  "an oversized waiver floors shipping at zero, never below",
+  cartTotals(20_000, { shippingWaivedPaise: 99_999 }).shippingPaise,
+  0,
+);
+equals(
+  "a discount larger than the basket floors the total at zero",
+  cartTotals(20_000, { discountPaise: 99_999 }).totalPaise,
+  0,
+);
+
+equals(
+  "an empty basket is told the full amount remaining for free delivery",
+  cartTotals(0).remainingForFreePaise,
+  FREE_SHIPPING_THRESHOLD_PAISE,
+);
+equals(
+  "remaining is never negative once the threshold is passed",
+  cartTotals(80_000).remainingForFreePaise,
+  0,
 );
 
 /* ------------------------------------------------------------------ */

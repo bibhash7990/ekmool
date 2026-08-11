@@ -73,6 +73,17 @@ export const POLICY_LINKS = [
   { href: "/refund-policy", label: "Refund Policy" },
 ] as const;
 
-/** Shipping rules (INR paise). Free above ₹499, else flat ₹49. */
-export const FREE_SHIPPING_THRESHOLD_PAISE = 49900;
-export const FLAT_SHIPPING_PAISE = 4900;
+/**
+ * Shipping rules (INR paise). Free above ₹499, else flat ₹49.
+ *
+ * The values moved to `@ekmool/core/shipping` when the app needed them, and
+ * are re-exported here rather than relocated in six call sites. Two clients
+ * quoting different delivery charges for the same basket is a lie the
+ * customer cannot resolve, and a shared constant is the only thing that
+ * actually prevents it — a comment asking the next person to update both
+ * would not have.
+ */
+export {
+  FREE_SHIPPING_THRESHOLD_PAISE,
+  FLAT_SHIPPING_PAISE,
+} from "@ekmool/core/shipping";

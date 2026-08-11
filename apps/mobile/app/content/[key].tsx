@@ -2,11 +2,10 @@ import { Fragment, type ReactNode, useCallback } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 
-import type { ContentDocument } from "@ekmool/contracts/documents";
 import { DELIVERY_ZONES, DISPATCH_DAYS } from "@ekmool/core/serviceability";
 
 import { Button, Eyebrow, Screen, SoilLine } from "@/components/ui";
-import { useCachedDocument } from "@/hooks/useCachedDocument";
+import { useContent } from "@/hooks/useCachedDocument";
 import { color, font, radius, space, type as typeScale } from "@/theme";
 
 /**
@@ -283,10 +282,7 @@ export default function ContentScreen() {
   const key = (Array.isArray(params.key) ? params.key[0] : params.key) ?? "";
   const page = PAGES[key];
 
-  const { data, state, refresh } = useCachedDocument<ContentDocument>(
-    "/catalog/content-v1.json",
-    "content",
-  );
+  const { data, state, refresh } = useContent();
 
   const goBack = useCallback(() => {
     if (router.canGoBack()) router.back();

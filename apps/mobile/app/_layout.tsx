@@ -90,6 +90,44 @@ export default function RootLayout() {
             <Stack.Screen name="product/[slug]" options={{ title: "" }} />
             <Stack.Screen name="cart" options={{ title: "Basket" }} />
             <Stack.Screen name="content/[key]" options={{ title: "" }} />
+
+            {/* The selling path. */}
+            <Stack.Screen name="checkout" options={{ title: "Checkout" }} />
+            {/*
+              The receipt is the one screen with no way back.
+
+              Checkout arrives here with `router.replace`, so the form is
+              already off the stack — but the header arrow and the iOS edge
+              swipe would still walk the customer back into a cart that has
+              just been emptied, which reads as the order having failed.
+              Both are turned off, and the screen offers its own routes out.
+            */}
+            <Stack.Screen
+              name="receipt/[id]"
+              options={{
+                title: "Order placed",
+                headerBackVisible: false,
+                gestureEnabled: false,
+              }}
+            />
+
+            {/* The account, reached by order reference — never by a login. */}
+            <Stack.Screen name="sign-in" options={{ title: "Find your order" }} />
+            <Stack.Screen name="order/[id]" options={{ title: "" }} />
+            <Stack.Screen
+              name="account/addresses"
+              options={{ title: "Saved addresses" }}
+            />
+            <Stack.Screen
+              name="account/privacy"
+              options={{ title: "Your data" }}
+            />
+
+            <Stack.Screen
+              name="review/[slug]"
+              options={{ title: "Write a review" }}
+            />
+
             <Stack.Screen name="+not-found" options={{ title: "Not found" }} />
           </Stack>
         </SafeAreaProvider>

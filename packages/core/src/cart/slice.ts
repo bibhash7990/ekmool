@@ -40,7 +40,16 @@ const initialState: CartState = {
   hydrated: false,
 };
 
-const MAX_QTY_PER_LINE = 10;
+/**
+ * Exported because a stepper has to know where to stop.
+ *
+ * The reducer clamps to this whatever a caller asks for, so nothing depends
+ * on a client honouring it — but a "+" button that stays enabled and then
+ * silently does nothing is a worse answer than one that disables at the cap.
+ * Both clients had mirrored the literal locally, which is exactly the drift
+ * this package exists to stop.
+ */
+export const MAX_QTY_PER_LINE = 10;
 
 const cartSlice = createSlice({
   name: "cart",

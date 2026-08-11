@@ -9,7 +9,6 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 
-import type { CatalogDocument } from "@ekmool/contracts/documents";
 import type { Product } from "@ekmool/core/catalog";
 import { selectCartCount } from "@ekmool/core/cart";
 import { formatPaise } from "@ekmool/core/money";
@@ -23,7 +22,7 @@ import {
   Screen,
   SoilLine,
 } from "@/components/ui";
-import { useCachedDocument } from "@/hooks/useCachedDocument";
+import { useCatalog } from "@/hooks/useCachedDocument";
 import { useAppSelector } from "@/store";
 import { color, font, radius, space, type as typeScale } from "@/theme";
 
@@ -141,10 +140,7 @@ function ProductCard({ product }: { product: Product }) {
 }
 
 export default function ShopScreen() {
-  const { data, state, refresh } = useCachedDocument<CatalogDocument>(
-    "/catalog/v1.json",
-    "catalog",
-  );
+  const { data, state, refresh } = useCatalog();
   const cartCount = useAppSelector(selectCartCount);
 
   const products = data?.products ?? [];

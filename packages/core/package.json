@@ -9,6 +9,7 @@
     "./gst": "./src/gst.ts",
     "./coupons": "./src/coupons.ts",
     "./serviceability": "./src/serviceability.ts",
+    "./shipping": "./src/shipping.ts",
     "./order-status": "./src/order-status.ts",
     "./search": "./src/search.ts",
     "./catalog": "./src/catalog-types.ts",

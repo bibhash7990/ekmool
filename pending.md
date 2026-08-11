@@ -128,6 +128,75 @@ screen should grow a real total.**
 
 ---
 
+## 3b. Phase 4 — what the commerce flows left open
+
+The app can sell: cart, guest checkout, Cash on Delivery, orders, the account
+area, wishlist and reviews. **None of it has been run against a server or a
+device**, and the phase's own exit criteria are mostly verification.
+
+### Needs a decision from the owner
+
+- **Online payment is deferred.** COD only, by decision, because the plan
+  says the UPI round trip is what "decides whether D4 stands" and that needs
+  the same physical hardware the launch gate is waiting on. `react-native-
+  razorpay` was checked and is **not** abandoned (3.0.0, published within the
+  month), so this is a scheduling choice, not a forced one.
+- **Data export goes through React Native's `Share`.** `/api/account/export`
+  needs the bearer token, which a Custom Tab does not carry, and there is no
+  `expo-file-system`. It satisfies DPDP s.11 — the person gets their data in
+  a keepable form — but a long history makes a long share message and some
+  targets truncate. `expo-file-system` is the request if that bites; it needs
+  approval (rule 12) and a size that caused it.
+- **`CHALLENGE_FAILED` says "Please reload and try again"** — browser wording
+  a phone customer cannot act on. It is reachable natively, via the hourly
+  ceiling or a keystore failure. `docs/SECURITY.md` requires every refusal be
+  byte-identical **across causes**, which does not forbid making the sentence
+  device-neutral for every client at once. A web copy change.
+- **Addresses are create-only from the app.** `POST /api/account/addresses`
+  validates with bare `savedAddressSchema`, which strips an unknown `id`, so
+  an "edit" would silently create a duplicate. Edit and set-default were
+  written against the assumed contract and **removed** on reading the real
+  one. Whether the phone should manage addresses is a product question.
+
+### Duplication that should move into `@ekmool/core`
+
+- `RETURN_REASONS` lives in `apps/web/src/db/queries/returns.ts`, which
+  imports `server-only` and `mysql2`, so the app cannot reach it and carries
+  a copy. `PAYMENT_STATUS_LABEL` is the same story. Both belong beside
+  `order-status.ts`, which was moved for exactly this reason. The drift is
+  bounded — the server's `z.enum` refuses a stale value — but bounded drift
+  is still drift.
+
+### Known-wrong, deliberately not fixed in this phase
+
+- **The double gutter.** `Screen` applies `paddingHorizontal: 20` and most
+  screens add another 20 inside their scroll content, so the app renders 40
+  where the design system says 20. Fixing it properly is a change to `Screen`
+  and every caller, and doing it screen-by-screen would leave the app
+  visibly inconsistent mid-way.
+- **A `Field` component is duplicated** in `sign-in.tsx` and
+  `account/addresses.tsx`. Two copies is the point at which it becomes
+  `ui/Field.tsx`.
+- **The web's order status copy is now the one that is wrong.** The app says
+  "Waiting for your payment" / "Waiting to be sent" / "On its way to you";
+  `apps/web` prints "On its way to you." for everything not delivered or
+  cancelled, including an order still sitting in the workshop.
+
+### Verification that has not run
+
+`test:mobile-api` gained a section for the new account endpoints and **has
+never executed** — Docker Desktop was stopped when the work finished, and the
+running image predated the new routes in any case. Rebuild the stack before
+trusting any of it.
+
+The device half of Phase 4 — a COD order from a Release build appearing in
+`/admin`, TalkBack over add-to-cart → checkout → receipt, the checkout form
+at 200% text scale — shares hardware with the Phase 3 launch gate and should
+be run in the same sitting. `docs/mobile/device-checklist.md` is an exit
+criterion and **is not written yet**.
+
+---
+
 ## 4. Deliberate gaps, written down so they are not rediscovered as bugs
 
 **The 304 needs an edge in front of it.** `/catalog/*.json` publish an ETag,

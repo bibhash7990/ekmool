@@ -178,6 +178,20 @@ module.exports = () => ({
     ],
 
     "expo-secure-store",
+
+    // The invoice, and only the invoice. `app/order/[id].tsx` opens
+    // `/orders/<id>/invoice` in a Custom Tab on Android and an
+    // SFSafariViewController on iOS rather than reimplementing a print
+    // surface that is a tax document when a GSTIN is configured and a
+    // pro-forma when one is not. Two layouts that must stay identical, one of
+    // them legal, is the failure being avoided.
+    //
+    // Listed here because the module ships an `app.plugin.js` — `expo install`
+    // said so, and it registers the Android intent filters a Custom Tab needs.
+    // Installed with `expo install`, not `pnpm add`, so the version matches
+    // SDK 57.
+    "expo-web-browser",
+
     [
       "expo-splash-screen",
       {

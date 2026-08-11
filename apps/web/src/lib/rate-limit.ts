@@ -257,6 +257,34 @@ export function limitsFor(pathname: string): RateLimitWindow {
   if (pathname.startsWith("/api/checkout")) {
     return { limit: 10, windowMs: 60_000 };
   }
+  // The account area's JSON reads — order history and the address book, both
+  // added for the phone. Sixty a minute is the default, and it is written out
+  // here rather than left implicit so that the number these two routes run
+  // under is a decision on the record instead of whatever the fallthrough
+  // happens to be next year.
+  //
+  // Two tighter alternatives were rejected:
+  //
+  //  - A small write bucket for saving an address. `limitsFor` keys on the
+  //    path and knows nothing about the method, so any number chosen for the
+  //    POST also throttles the GET the address screen makes on open — and the
+  //    write is already bounded by MAX_ADDRESSES (10) in the query layer,
+  //    which is a far harder ceiling than a minute bucket.
+  //  - A second, per-install bucket via `dualLimitsFor`. That costs a second
+  //    Redis round trip on every request, and the fairness problem it solves
+  //    is a property of a *tight* bucket: at sixty a minute an honest phone
+  //    behind a carrier NAT is nowhere near the edge. See the note there on
+  //    why only three routes take it.
+  //
+  // Neither route is guessable in principle the way lookup is — both need a
+  // valid signature before they read anything — so the 5/min reasoning above
+  // does not apply.
+  if (
+    pathname.startsWith("/api/account/orders") ||
+    pathname.startsWith("/api/account/addresses")
+  ) {
+    return { limit: 60, windowMs: 60_000 };
+  }
   // Takes an email address off a form. Nobody legitimately registers
   // interest in ten packs a minute, and the cheapest way to make a
   // subscribe-someone-else nuisance not worth the effort is to make it slow.

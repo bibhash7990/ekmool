@@ -34,6 +34,14 @@ export type EyebrowProps = {
   heading?: boolean;
   /** `onDark` for the one green-950 band a page is allowed. */
   tone?: EyebrowTone;
+  /**
+   * For `accessibilityLabelledBy`, when this eyebrow is the visible label of
+   * a control below it. Without it the cart's coupon field had to wrap this
+   * component in a bare `View` purely to hang an id on — a wrapper that
+   * exists for the accessibility tree and does nothing for a sighted reader
+   * is the kind of thing that gets deleted by someone tidying up.
+   */
+  nativeID?: string;
   style?: StyleProp<TextStyle>;
 };
 
@@ -41,11 +49,13 @@ export function Eyebrow({
   children,
   heading = false,
   tone = "default",
+  nativeID,
   style,
 }: EyebrowProps) {
   return (
     <Text
       accessibilityRole={heading ? "header" : undefined}
+      nativeID={nativeID}
       style={[styles.eyebrow, tones[tone], style]}
     >
       {children}

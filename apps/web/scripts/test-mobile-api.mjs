@@ -16,6 +16,10 @@
  *     email. A different failure for each is an oracle
  *   - a bearer token reads exactly what the cookie reads, and nothing that
  *     belongs to anyone else
+ *   - the account area's JSON routes — order history and saved addresses —
+ *     are scoped to the email inside the token: the caller's own order is
+ *     there and another customer's, placed from the same IP, is not. And
+ *     `createdAt` is an ISO string, not whatever a cache turned it into
  *   - two install ids behind one IP do not take each other's rate-limit
  *     tokens; one install id repeating still gets stopped
  *   - no new endpoint hands a native client a cookie
@@ -470,6 +474,179 @@ console.log("\n4b. The native client skipped a challenge it could not solve");
         " so the native skip is untested here. Run against a Turnstile-configured server to exercise it.",
     );
   }
+}
+
+/* ------------------------------------------------------------------ */
+console.log("\n4c. The account area over a bearer token");
+
+{
+  // GET /api/account/orders and GET/POST /api/account/addresses. The web
+  // reads both from server-rendered pages, so these two routes exist only
+  // for a client that cannot run a server component — which makes this the
+  // only place they are exercised at all.
+  //
+  // Uses the token minted in section 4 and spends nothing from the 5/min
+  // session bucket: every request below is on the 60/min default.
+  const bearer = { authorization: `Bearer ${token}` };
+
+  const anonymous = await fetch(`${base}/api/account/orders`);
+  check("orders: no token is refused", anonymous.status === 401, `got ${anonymous.status}`);
+  check(
+    "orders: the refusal is the account area's NO_SESSION",
+    (await anonymous.json()).code === "NO_SESSION",
+  );
+  check(
+    "orders: even the refusal is no-store",
+    (anonymous.headers.get("cache-control") ?? "").includes("no-store"),
+    anonymous.headers.get("cache-control") ?? "none",
+  );
+
+  // Right shape, wrong key. A route that read the payload before checking
+  // the signature would hand this one somebody's order history.
+  const payload = token.split(".")[0];
+  const forged = `${payload}.${createHmac("sha256", "not-the-secret").update(payload).digest("hex")}`;
+  const forgedResponse = await fetch(`${base}/api/account/orders`, {
+    headers: { authorization: `Bearer ${forged}` },
+  });
+  check(
+    "orders: a token signed with another secret reads nothing",
+    forgedResponse.status === 401,
+    `got ${forgedResponse.status}`,
+  );
+
+  const mine = await fetch(`${base}/api/account/orders`, { headers: bearer });
+  check("orders: a valid bearer token is accepted", mine.status === 200, `got ${mine.status}`);
+  check(
+    "orders: the response is never cached",
+    (mine.headers.get("cache-control") ?? "").includes("no-store"),
+    mine.headers.get("cache-control") ?? "none",
+  );
+
+  const body = await mine.json();
+  const orders = body.orders ?? [];
+  check("orders: the body is { orders: [...] }", Array.isArray(body.orders));
+
+  const ids = orders.map((order) => order.id);
+  check(
+    "orders: the caller's own order is listed",
+    ids.includes(orderId),
+    `${ids.length} orders, none of them ${orderId}`,
+  );
+  // The assertion that fails a handler scoped by a parameter rather than by
+  // the token: OTHER's order was placed from this same IP, seconds ago.
+  check(
+    "orders: another customer's order is NOT listed",
+    !ids.includes(otherOrderId),
+    `${otherOrderId} leaked into ${BUYER}'s history`,
+  );
+
+  const summary = orders.find((order) => order.id === orderId) ?? {};
+  check("orders: status is present", typeof summary.status === "string", JSON.stringify(summary.status));
+  check(
+    "orders: the total is integer paise",
+    Number.isInteger(summary.totalPaise),
+    JSON.stringify(summary.totalPaise),
+  );
+  check(
+    "orders: itemCount is an integer",
+    Number.isInteger(summary.itemCount),
+    JSON.stringify(summary.itemCount),
+  );
+  // A Date that reached JSON through unstable_cache arrives as a string that
+  // Date.parse still accepts, so parseability alone would not catch the bug
+  // this asserts against — the type is what matters. `toISOString` output,
+  // and nothing else, round-trips to itself.
+  check(
+    "orders: createdAt is an ISO 8601 string, not a Date object or a number",
+    typeof summary.createdAt === "string" &&
+      new Date(summary.createdAt).toISOString() === summary.createdAt,
+    JSON.stringify(summary.createdAt),
+  );
+
+  /* addresses */
+
+  const noToken = await fetch(`${base}/api/account/addresses`);
+  check("addresses: no token is refused", noToken.status === 401, `got ${noToken.status}`);
+
+  const empty = await fetch(`${base}/api/account/addresses`, { headers: bearer });
+  check("addresses: a valid bearer token is accepted", empty.status === 200, `got ${empty.status}`);
+  check(
+    "addresses: the response is never cached",
+    (empty.headers.get("cache-control") ?? "").includes("no-store"),
+    empty.headers.get("cache-control") ?? "none",
+  );
+  const emptyBody = await empty.json();
+  check("addresses: the body is { addresses: [...] }", Array.isArray(emptyBody.addresses));
+  const before = emptyBody.addresses ?? [];
+  check("addresses: a new customer has none", before.length === 0, `${before.length} saved`);
+
+  // The shared schema is the decision, not a suggestion: "Karnatakaa" is not
+  // in INDIAN_STATES, and a handler that trusted the body would store it.
+  const invalid = await post(
+    "/api/account/addresses",
+    {
+      label: "Home",
+      line1: "12 Residency Road",
+      city: "Bengaluru",
+      state: "Karnatakaa",
+      pincode: "560025",
+    },
+    bearer,
+  );
+  check("addresses: an unknown state is refused", invalid.status === 422, `got ${invalid.status}`);
+  const invalidBody = await invalid.json();
+  check(
+    "addresses: …as VALIDATION_FAILED, naming the field",
+    invalidBody.code === "VALIDATION_FAILED" &&
+      (invalidBody.issues ?? []).some((issue) => issue.path === "state"),
+    JSON.stringify(invalidBody),
+  );
+
+  const created = await post(
+    "/api/account/addresses",
+    {
+      label: "Home",
+      line1: "12 Residency Road",
+      line2: "",
+      city: "Bengaluru",
+      state: "Karnataka",
+      pincode: "560025",
+      landmark: "",
+    },
+    bearer,
+  );
+  check("addresses: a valid address is created", created.status === 201, `got ${created.status}`);
+  const createdBody = await created.json();
+  check("addresses: it comes back with its id", Number.isInteger(createdBody.id));
+  check(
+    "addresses: and the list as it now stands",
+    Array.isArray(createdBody.addresses) && createdBody.addresses.length === before.length + 1,
+    JSON.stringify(createdBody.addresses?.length),
+  );
+  // The server decides this, not the client: the first address saved is the
+  // default whether or not isDefault was sent, or checkout has nothing to
+  // prefill from. A client appending what it posted would show it as
+  // non-default.
+  const saved = (createdBody.addresses ?? []).find((address) => address.id === createdBody.id) ?? {};
+  check("addresses: the first one saved is the default", saved.isDefault === true,
+    JSON.stringify(saved.isDefault));
+  check("addresses: it stored what was sent", saved.line1 === "12 Residency Road", JSON.stringify(saved.line1));
+
+  const reread = await fetch(`${base}/api/account/addresses`, { headers: bearer });
+  const after = (await reread.json()).addresses ?? [];
+  check(
+    "addresses: a re-read agrees with the create response",
+    after.length === (createdBody.addresses ?? []).length &&
+      after.some((address) => address.id === createdBody.id),
+    `${after.length} on re-read`,
+  );
+  // Nothing here may echo a customer id back — the app sends ids of its own
+  // rows and nothing that identifies a person, and a leaked customer id is
+  // the parameter a future handler would be tempted to trust.
+  check(
+    "addresses: no customer id crosses the wire",
+    !JSON.stringify(after).includes("customerId"),
+  );
 }
 
 /* ------------------------------------------------------------------ */

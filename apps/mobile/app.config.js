@@ -1,7 +1,11 @@
 /**
- * JavaScript rather than app.json, because the config has to read the
- * environment — the API origin and the EAS project id are per-deployment and
- * must not be checked in.
+ * A config file rather than app.json, because JSON cannot carry a reason.
+ * Nearly every field below is a decision with an alternative that was
+ * rejected, and the plan's original justification — that this file had to
+ * read `process.env` — no longer holds: the project id is checked in (see
+ * `extra.eas` at the foot of the file) and the API origin moved to
+ * `eas.json`, because eas-cli reads neither `.env` files nor this process's
+ * environment. What is left is the comments, and they are enough.
  *
  * **JavaScript rather than TypeScript, and that is a workaround with a date
  * on it.** `eas-cli` cannot parse an `app.config.ts` at all right now:
@@ -48,7 +52,27 @@
  */
 module.exports = () => ({
   name: "Ekmool",
+
+  // The EAS account that owns the project. Required because the project
+  // lives under a team rather than a personal account, and `eas init` cannot
+  // write it here itself — a dynamic config is code, so the CLI prints the
+  // field and stops rather than rewriting a file it cannot safely parse.
+  //
+  // Not a secret. It is the account name in every expo.dev URL for this app.
+  owner: "bibhashs-team",
+
+  // **Changing this after a project exists is not a rename.** EAS fixes a
+  // project's slug when the project is created and the dashboard's rename
+  // does not move it, so a mismatch between this line and the project behind
+  // `extra.eas.projectId` fails every command with "Slug for project
+  // identified by ... does not match". Verified the hard way against a
+  // project first created as `ekmoool`: renaming on expo.dev left the server
+  // slug where it was, and a new project was the only way out.
+  //
+  // It is worth the trouble rather than editing this line to match, because
+  // the slug is what expo.dev URLs and update manifests are built from.
   slug: "ekmool",
+
   scheme: "ekmool",
 
   // D9: the version lives here, in the diff, where a reviewer sees it change.
@@ -188,7 +212,29 @@ module.exports = () => ({
 
   extra: {
     eas: {
-      projectId: process.env.EAS_PROJECT_ID,
+      // Checked in as a literal, and that is a reversal of the plan, which
+      // had it arriving from EAS_PROJECT_ID so it would not be committed.
+      //
+      // The reason it was env-supplied does not survive contact: eas-cli
+      // evaluates this file in its own process and **does not load .env
+      // files**. Tested — with the id in .env.local, every command still
+      // reports "EAS project not configured. Must configure EAS project by
+      // running 'eas init'", which is an error that points at the wrong
+      // problem entirely. The only ways to deliver it were an inline
+      // variable on every invocation or a shell export, both of which are
+      // forgotten silently and fail the same misleading way.
+      //
+      // Checking it in costs nothing real. It is not a credential: it
+      // identifies a project, it is visible at
+      // expo.dev/accounts/bibhashs-team/projects/ekmool, and it is embedded
+      // in the update manifests every installed app fetches. Compare the
+      // GSTIN rule in AGENTS.md — the danger there is a *fabricated* value
+      // being taken for real, and there is no fabrication here.
+      //
+      // The literal is also what makes the slug check above meaningful: the
+      // two are compared on every command, and a pair that is checked in
+      // together cannot drift apart on one machine only.
+      projectId: "1a1e4632-0db5-43bd-a428-523201a891df",
     },
   },
 });

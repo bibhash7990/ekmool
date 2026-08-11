@@ -109,8 +109,13 @@ export default (): ExpoConfig => ({
     }],
   ],
   extra: {
-    apiUrl: process.env.EXPO_PUBLIC_API_URL,
-    eas: { projectId: process.env.EAS_PROJECT_ID },
+    // As shipped: both literals, not environment reads. eas-cli evaluates
+    // this file in its own process and loads no .env files, so the plan's
+    // `process.env.EAS_PROJECT_ID` reached nothing and failed with an error
+    // naming the wrong problem. `apiUrl` went to eas.json for the same
+    // reason. Neither value is a secret; see app.config.js and the release
+    // gate for the full account.
+    eas: { projectId: "1a1e4632-0db5-43bd-a428-523201a891df" },
   },
 });
 ```

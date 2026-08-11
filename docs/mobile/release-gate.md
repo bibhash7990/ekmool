@@ -41,27 +41,31 @@ npx eas-cli@latest init          # prints the project id
 app imports, it releases weekly, and rule 12 costs a conversation — so it is
 fetched per invocation instead of pinned in `package.json`.
 
-`eas init` prints a project id, which `app.config.js` reads from
-`EAS_PROJECT_ID`.
+**This is already done for `@bibhashs-team/ekmool` and needs repeating only
+for a new account.** `owner` and `extra.eas.projectId` are checked into
+`app.config.js`, so no environment variable is required to build.
 
-**`.env.local` does not work for this one, and the failure is confusing.**
-Tested rather than assumed: with the id in `apps/mobile/.env.local`,
-`eas config` still reports *"EAS project not configured. Must configure EAS
-project by running 'eas init'"*; passing the same value inline on the command
-resolves the project immediately. The EAS CLI evaluates the config in its own
-process and does not load the project's `.env` files, so the variable has to
-reach it another way — inline, exported in the shell, or declared in
-`eas.json`.
+Three things cost an evening the first time, all recorded so they cost
+nobody a second one:
 
-Two other things the CLI checks that are easy to trip over:
+- **`.env.local` cannot carry `EAS_PROJECT_ID`.** eas-cli evaluates the
+  config in its own process and does not load `.env` files. The value is
+  simply absent, and the error — *"EAS project not configured. Must
+  configure EAS project by running 'eas init'"* — points at the wrong
+  problem. That is why the id is a literal in the config.
+- **A project's slug cannot be renamed after creation.** The dashboard
+  rename changes the display name only; `project:info` keeps returning the
+  original slug, and every command fails with `Slug for project identified
+  by "extra.eas.projectId" (x) does not match the "slug" field (y)`. The
+  first project here was created as `ekmoool` and had to be replaced.
+  **Do not fix this by editing `slug`** — it is what expo.dev URLs and
+  update manifests are built from.
+- **`eas init` cannot write to a dynamic config.** It prints the fields and
+  stops. Paste them in by hand; the CLI is not being unhelpful, it just
+  cannot safely rewrite code.
 
-- **The `slug` in `app.config.js` must match the slug of the project the id
-  points at.** They are compared, and a mismatch fails with
-  `Slug for project identified by "extra.eas.projectId" (x) does not match
-  the "slug" field (y)`. A project created with a typo has to be renamed on
-  expo.dev, or a new one created — the config is not the place to "fix" it,
-  because the slug is what the customer-visible Expo URL is built from.
-- The account the id belongs to must be the one `eas login` used.
+For a fresh account: `npx eas-cli@latest init` with `extra.eas.projectId`
+removed, then paste back the id and `owner` it prints.
 
 `EXPO_PUBLIC_API_URL` is different and the distinction has teeth. It is
 inlined into the JS bundle, and **the bundle is built on EAS's servers**.

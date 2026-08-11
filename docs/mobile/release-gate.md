@@ -90,6 +90,21 @@ npx eas-cli@latest build --profile production-apk --platform android
 npx eas-cli@latest build --profile production --platform ios
 ```
 
+**If EAS offers to install `expo-updates`, say no.** It offers because a
+build profile names a `channel`, and it will install the package, edit
+`package.json`, `pnpm-lock.yaml` and `pnpm-workspace.yaml`, and then stop —
+because it cannot write `updates.url` into a dynamic config either. The
+channels have been removed from `eas.json` so it stops asking.
+
+That is not only about rule 12. `expo-updates` can hold the native splash
+screen while it checks for a new bundle, which is **the same symptom this
+gate exists to detect**. Installing it now would make a hang ambiguous
+between #47687 and an update check, and would change the cold-start number
+this gate is supposed to establish as a baseline — a measurement invalidated
+by the next phase is worse than none. OTA updates, channels and
+`runtimeVersion` are Phase 6's subject, and belong in a build measured
+against the number this one produces.
+
 **The config is `app.config.js`, not `.ts`, and that is not a style
 preference.** `eas-cli` bundles its own TypeScript and currently resolves
 version 7, whose `require('typescript')` no longer exposes the compiler API —

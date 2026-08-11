@@ -72,7 +72,7 @@ that every package permitted to run code at install time was looked at.
 
 ---
 
-## 2. `app.config.ts`
+## 2. `app.config.js`
 
 TypeScript, not `app.json`, because it needs to read the environment:
 
@@ -132,7 +132,7 @@ design exercise first and a code change second.
 `EXPO_PUBLIC_API_URL` is compiled into the bundle, exactly like
 `NEXT_PUBLIC_*`. `docs/SECURITY.md`'s rule carries over unchanged:
 **anything with that prefix is public**. No secret ever goes in
-`app.config.ts`, `extra`, or an `EXPO_PUBLIC_` variable. The Razorpay key id
+`app.config.js`, `extra`, or an `EXPO_PUBLIC_` variable. The Razorpay key id
 is publishable and may; nothing else may.
 
 ---

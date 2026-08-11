@@ -1,6 +1,6 @@
 # Pending
 
-Everything known to be outstanding, as of Phase 2 (`762dcf6`). Nothing here
+Everything known to be outstanding, as of Phase 3 (`39f3226`). Nothing here
 is a guess — each item is something that was deliberately deferred, could
 not be run on this machine, or was flagged during the work and left alone on
 purpose.
@@ -167,8 +167,8 @@ the field is inert rather than wrong.
 - `research/audits/lh-product-m2.json` is a stale artifact from an older
   milestone, sitting beside the current run's four reports. Harmless, but it
   will confuse whoever reads the directory next.
-- The mobile app does not exist yet, so `docs/mobile/phase-3-app-foundation.md`
-  onwards are plans rather than descriptions. Phases 4–6 are untouched.
+- `docs/mobile/phase-4-commerce-flows.md` onwards are plans rather than
+  descriptions. Phases 4–6 are untouched.
 
 ---
 

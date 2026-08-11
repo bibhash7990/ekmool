@@ -14,12 +14,14 @@
     "preview": {
       "distribution": "internal",
       "channel": "preview",
+      "env": { "EXPO_PUBLIC_API_URL": "https://ekmool-ten.vercel.app" },
       "android": { "buildType": "apk" },
       "ios": { "simulator": false }
     },
 
     "production": {
       "channel": "production",
+      "env": { "EXPO_PUBLIC_API_URL": "https://ekmool-ten.vercel.app" },
       "android": { "buildType": "app-bundle" }
     },
 

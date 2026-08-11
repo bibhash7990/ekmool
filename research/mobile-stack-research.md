@@ -305,7 +305,7 @@ kind this codebase is careful about.
 ## 6. Build and release mechanics
 
 **EAS Build, no committed `android/` or `ios/` directories.** Continuous
-Native Generation — prebuild runs on the build machine from `app.config.ts`
+Native Generation — prebuild runs on the build machine from `app.config.js`
 and config plugins. Committing the native projects means every SDK upgrade
 becomes a three-way merge of Gradle files. The one reason to commit them is
 native code that no config plugin can express, and there is none here.

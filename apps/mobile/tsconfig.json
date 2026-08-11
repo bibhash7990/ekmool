@@ -13,6 +13,15 @@
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
+    // For app.config.js alone, and only because eas-cli cannot parse a
+    // TypeScript config — see the header comment in that file. Without
+    // `checkJs` the JSDoc annotation there is decoration; with it, `tsc
+    // --noEmit` still catches a key that SDK 57 removed, which is the check
+    // that earned its place twice already. `include` below names the single
+    // file rather than `**/*.js`, so this does not quietly start checking
+    // eslint.config.mjs or anything else that arrives later.
+    "allowJs": true,
+    "checkJs": true,
     "paths": {
       "@/*": ["./src/*"]
     }
@@ -20,6 +29,7 @@
   "include": [
     "**/*.ts",
     "**/*.tsx",
+    "app.config.js",
     ".expo/types/**/*.ts",
     "expo-env.d.ts"
   ],

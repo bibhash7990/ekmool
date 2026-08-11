@@ -171,7 +171,7 @@ export function peekCapabilities(): Capabilities | null {
  *
  * Note `CLIENT_BUILD` is 0 when the binary states no build number, and 0
  * fails every check — the safe direction the contract asks for, and a real
- * consequence today, because `app.config.ts` sets neither `ios.buildNumber`
+ * consequence today, because `app.config.js` sets neither `ios.buildNumber`
  * nor `android.versionCode`. See the comment on `readBuild` in
  * `src/lib/client-info.ts`; the fix is in that config file, not in a fudge
  * here.

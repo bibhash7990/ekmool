@@ -1,7 +1,7 @@
 # Continuous Native Generation: the native projects are BUILD OUTPUT, not
-# source. `expo prebuild` regenerates them from app.config.ts, so a committed
+# source. `expo prebuild` regenerates them from app.config.js, so a committed
 # android/ or ios/ directory is a second source of truth that silently wins
-# over the config — an icon changed in app.config.ts would not appear, and
+# over the config — an icon changed in app.config.js would not appear, and
 # nobody would know why.
 #
 # Ignored before the first local prebuild rather than after, so a stray

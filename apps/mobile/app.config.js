@@ -1,17 +1,52 @@
-import type { ExpoConfig } from "expo/config";
-
 /**
- * TypeScript rather than app.json, because the config has to read the
+ * JavaScript rather than app.json, because the config has to read the
  * environment — the API origin and the EAS project id are per-deployment and
  * must not be checked in.
+ *
+ * **JavaScript rather than TypeScript, and that is a workaround with a date
+ * on it.** `eas-cli` cannot parse an `app.config.ts` at all right now:
+ *
+ *     @expo/require-utils@55.0.6  build/load.js:179
+ *         const ts = loadTypescript();          // bare require('typescript')
+ *         if (ts) {                             // truthy
+ *           module = ts.ModuleKind.CommonJS;    // TypeError
+ *
+ * `loadTypescript()` resolves `typescript` from the CLI's own tree, not this
+ * project's. Installed with npx, that tree gets TypeScript **7** — the Go
+ * port, whose `require('typescript')` entry point exports only `{ version,
+ * versionMajorMinor }`. The compiler API is gone, so `ts.ModuleKind` is
+ * undefined and the `if (ts)` guard sails straight past it. The result is
+ * `Cannot read properties of undefined (reading 'CommonJS')` on every
+ * `eas init` and `eas build`.
+ *
+ * Nothing here is at fault: the project's own Expo CLI reads a `.ts` config
+ * fine, and so does `expo export`. Only `eas-cli` breaks, and only because
+ * npm hoists TypeScript 7 into it — `@expo/require-utils` asks for `^5.0.0`
+ * and `ts-node`'s looser `>=2.7` peer wins the hoist.
+ *
+ * Verified rather than assumed, by loading both forms through the broken
+ * CLI's own loader: `.ts` throws, this file loads and reads `process.env`.
+ *
+ * The alternative — keeping `.ts` and installing TypeScript 5 next to
+ * `eas-cli` — also works and was tested (5.9.3, loads fine). It was rejected
+ * because it has to be remembered on every machine, by every person, and in
+ * CI, and it is silent when forgotten. This file cannot be forgotten.
+ *
+ * **Revert to `.ts` when `@expo/require-utils` guards on `ts.ModuleKind`
+ * rather than on `ts`.** The type checking is not lost meanwhile: the JSDoc
+ * annotation below is checked by `tsc --noEmit` via `checkJs` in
+ * tsconfig.json, which is what caught `newArchEnabled` and
+ * `edgeToEdgeEnabled` being removed in SDK 57.
  *
  * Nothing secret goes in here. `extra` and every EXPO_PUBLIC_* variable are
  * compiled into the bundle and can be read out of the APK with a zip tool;
  * `docs/SECURITY.md`'s rule for NEXT_PUBLIC_* carries over word for word.
  * The Razorpay key id is publishable and may live here when Phase 4 needs
  * it. The key secret may not, ever.
+ *
+ * @type {() => import("expo/config").ExpoConfig}
  */
-export default (): ExpoConfig => ({
+module.exports = () => ({
   name: "Ekmool",
   slug: "ekmool",
   scheme: "ekmool",
@@ -27,8 +62,8 @@ export default (): ExpoConfig => ({
   //
   // **Bump the build number in the same commit as the change it ships.**
   // There is deliberately no `autoIncrement` in eas.json: it cannot write
-  // back into a dynamic `app.config.ts`, so it would either fail the build
-  // or silently leave the number where it was. Manual is the honest option
+  // back into a dynamic config, so it would either fail the build or
+  // silently leave the number where it was. Manual is the honest option
   // here, and it is what D9 asked for — a version a reviewer sees change.
   //
   // The number is load-bearing beyond the store listing. src/lib/client-info.ts
@@ -55,9 +90,9 @@ export default (): ExpoConfig => ({
   // Paper, not white, and set here as well as in the app so the very first
   // frame — before React has mounted anything — is already the brand's
   // ground rather than a white flash. The literal is unavoidable at this
-  // one layer: app.config.ts is read by the Expo CLI at build time, outside
-  // the bundler, so it cannot import @ekmool/tokens. It is checked against
-  // the token by scripts/check-mobile.mjs instead.
+  // one layer: this file is read by the Expo CLI at build time, outside the
+  // bundler, so it cannot import @ekmool/tokens. It is checked against the
+  // token by scripts/check-mobile.mjs instead.
   backgroundColor: "#FAF7F0",
 
   icon: "./assets/icon.png",

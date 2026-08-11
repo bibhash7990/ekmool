@@ -85,7 +85,7 @@ function ProductCard({ product }: { product: Product }) {
 
   const open = useCallback(() => {
     // The object form rather than a template literal: `typedRoutes` is on in
-    // app.config.ts, and this is the shape that typechecks whether or not
+    // app.config.js, and this is the shape that typechecks whether or not
     // .expo/types has been generated in the checkout doing the build.
     router.push({ pathname: "/product/[slug]", params: { slug: product.slug } });
   }, [product.slug]);

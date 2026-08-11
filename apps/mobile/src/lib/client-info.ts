@@ -22,11 +22,11 @@ import { Platform } from "react-native";
 const CLIENT_PLATFORM = "mobile";
 
 /**
- * The marketing version from app.config.ts, e.g. `1.0.0`.
+ * The marketing version from app.config.js, e.g. `1.0.0`.
  *
  * Forced to three numeric parts because the server's regex requires them.
  * A pre-release version like `1.1.0-beta.2` is a perfectly reasonable thing
- * for someone to write in app.config.ts one day, and it would make this
+ * for someone to write in app.config.js one day, and it would make this
  * header unparseable — which would show up as "the app is being rate-limited
  * like a browser" and be traced back to here after a long afternoon. Cheaper
  * to truncate to the numeric prefix and carry on.
@@ -50,7 +50,7 @@ function readVersion(): string {
  *
  * **Falls back to 0, and 0 fails every `minClientBuild` check.** That is the
  * safe direction the contract asks for (see `ClientIdentity.build`), but it
- * has a live consequence worth knowing: `apps/mobile/app.config.ts` sets
+ * has a live consequence worth knowing: `apps/mobile/app.config.js` sets
  * neither `ios.buildNumber` nor `android.versionCode` today, so until it does
  * — or until EAS `autoIncrement` writes them at build time — this reports 0,
  * and a server with even the default `minClientBuild: 1` will consider every

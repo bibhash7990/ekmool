@@ -32,34 +32,71 @@ That check is a grep. **This gate is the proof.**
 ## Before the first build
 
 ```bash
-pnpm --filter mobile exec eas login
-pnpm --filter mobile exec eas init          # writes the project id
+cd apps/mobile
+npx eas-cli@latest login
+npx eas-cli@latest init          # prints the project id
 ```
 
-`eas init` prints a project id. Put it in `apps/mobile/.env.local` as
-`EAS_PROJECT_ID` — `app.config.ts` reads it from there. It is not a secret,
-but it is per-account, which is why it is not checked in.
+`npx`, not a dependency. `eas-cli` is a build tool rather than something the
+app imports, it releases weekly, and rule 12 costs a conversation — so it is
+fetched per invocation instead of pinned in `package.json`.
 
-Also set `EXPO_PUBLIC_API_URL` to the origin the app should talk to. For a
-build that will run on a phone, that is the deployed site, not localhost —
-a device is not the machine running the server, so `localhost` reaches the
-phone itself and nothing else.
+`eas init` prints a project id, which `app.config.js` reads from
+`EAS_PROJECT_ID`.
+
+**`.env.local` does not work for this one, and the failure is confusing.**
+Tested rather than assumed: with the id in `apps/mobile/.env.local`,
+`eas config` still reports *"EAS project not configured. Must configure EAS
+project by running 'eas init'"*; passing the same value inline on the command
+resolves the project immediately. The EAS CLI evaluates the config in its own
+process and does not load the project's `.env` files, so the variable has to
+reach it another way — inline, exported in the shell, or declared in
+`eas.json`.
+
+Two other things the CLI checks that are easy to trip over:
+
+- **The `slug` in `app.config.js` must match the slug of the project the id
+  points at.** They are compared, and a mismatch fails with
+  `Slug for project identified by "extra.eas.projectId" (x) does not match
+  the "slug" field (y)`. A project created with a typo has to be renamed on
+  expo.dev, or a new one created — the config is not the place to "fix" it,
+  because the slug is what the customer-visible Expo URL is built from.
+- The account the id belongs to must be the one `eas login` used.
+
+`EXPO_PUBLIC_API_URL` is different and the distinction has teeth. It is
+inlined into the JS bundle, and **the bundle is built on EAS's servers**.
+`.env.local` is gitignored, EAS does not upload gitignored files, so a value
+set only there is absent exactly where it is needed. The result is an app
+that installs, launches, and shows every screen empty — which looks like an
+app bug and is not one. It is declared in `eas.json`'s `env` for that reason;
+see the comment there.
 
 ---
 
 ## The builds
 
 ```bash
-# Android. app-bundle is what the Play Store takes; production-apk is the
+# From apps/mobile.
+#
+# Android: app-bundle is what the Play Store takes; production-apk is the
 # same build as an APK you can sideload onto a real handset in one step.
-pnpm --filter mobile exec eas build --profile production-apk --platform android
+npx eas-cli@latest build --profile production-apk --platform android
 
 # iOS → TestFlight → a physical iPhone.
-pnpm --filter mobile exec eas build --profile production --platform ios
+npx eas-cli@latest build --profile production --platform ios
 ```
 
+**The config is `app.config.js`, not `.ts`, and that is not a style
+preference.** `eas-cli` bundles its own TypeScript and currently resolves
+version 7, whose `require('typescript')` no longer exposes the compiler API —
+so every `eas` command that reads a TypeScript config dies with `Cannot read
+properties of undefined (reading 'CommonJS')`. The full account, including
+the alternative that was tested and rejected, is in the header of
+`apps/mobile/app.config.js`. Do not rename it back without checking that
+first.
+
 `appVersionSource: "local"` in `eas.json` means the version comes from
-`app.config.ts`, in the diff, where a reviewer sees it change — rather than
+`app.config.js`, in the diff, where a reviewer sees it change — rather than
 from a counter on Expo's servers that the repository cannot see.
 
 ---

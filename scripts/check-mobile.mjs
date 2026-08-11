@@ -27,7 +27,7 @@
  *
  *      src/theme is exempt: it is the module that turns @ekmool/tokens into
  *      React Native values, so it is the one place a hex may be read.
- *      app.config.ts is exempt too, and is checked separately below.
+ *      app.config.js is exempt too, and is checked separately below.
  *
  *   3. No direct @react-navigation import.
  *
@@ -35,7 +35,7 @@
  *      transitive dependency's major version, and the two disagree about who
  *      owns the route tree.
  *
- *   4. app.config.ts's colours match the tokens.
+ *   4. app.config.js's colours match the tokens.
  *
  *      The config is read by the Expo CLI outside the bundler, so it cannot
  *      import @ekmool/tokens — the splash and adaptive-icon background have
@@ -156,9 +156,9 @@ const show = (file) => relative(root, file).replace(/\\/g, "/");
   }
 }
 
-/* ---------------- 4. app.config.ts agrees with the tokens ------------ */
+/* ---------------- 4. app.config.js agrees with the tokens ------------ */
 {
-  const configPath = join(mobile, "app.config.ts");
+  const configPath = join(mobile, "app.config.js");
   const tokensPath = join(root, "packages", "tokens", "src", "tokens.ts");
 
   if (existsSync(configPath) && existsSync(tokensPath)) {
@@ -176,15 +176,15 @@ const show = (file) => relative(root, file).replace(/\\/g, "/");
       const wrong = literals.filter((hex) => hex.toUpperCase() !== paper.toUpperCase());
 
       if (literals.length === 0) {
-        fail("app.config.ts declares no background colour — the first frame will be white");
+        fail("app.config.js declares no background colour — the first frame will be white");
       } else if (wrong.length > 0) {
         fail(
-          `app.config.ts uses ${[...new Set(wrong)].join(", ")} where the paper token is ${paper}.\n` +
+          `app.config.js uses ${[...new Set(wrong)].join(", ")} where the paper token is ${paper}.\n` +
             "        The config cannot import the tokens (the Expo CLI reads it outside the\n" +
             "        bundler), so these literals are checked instead of trusted.",
         );
       } else {
-        pass(`app.config.ts colours match the paper token (${paper})`);
+        pass(`app.config.js colours match the paper token (${paper})`);
       }
     }
   }

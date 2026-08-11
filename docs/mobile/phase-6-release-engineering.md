@@ -20,9 +20,9 @@ phase is.
 
 | Number | Where | Changes when |
 |---|---|---|
-| `version` — `1.4.0` | `app.config.ts` | The release. Semver, chosen by a human. Visible to customers. |
-| `android.versionCode` / `ios.buildNumber` | `app.config.ts` | Every build submitted to a store. Monotonic integers. |
-| `runtimeVersion` | `app.config.ts` | The **native** contract: which binaries can run a given JS bundle. |
+| `version` — `1.4.0` | `app.config.js` | The release. Semver, chosen by a human. Visible to customers. |
+| `android.versionCode` / `ios.buildNumber` | `app.config.js` | Every build submitted to a store. Monotonic integers. |
+| `runtimeVersion` | `app.config.js` | The **native** contract: which binaries can run a given JS bundle. |
 
 ### D9 — `appVersionSource: "local"`
 
@@ -130,7 +130,7 @@ orphaned. EAS holds it, and `eas credentials` can export a backup, which
 should be done once and stored wherever this project keeps
 `SESSION_SECRET`.
 
-**No credential, key or password appears in `eas.json`, `app.config.ts` or
+**No credential, key or password appears in `eas.json`, `app.config.js` or
 any `EXPO_PUBLIC_` variable.** `docs/SECURITY.md` rule one, unchanged. Build
 secrets go in EAS environment variables.
 

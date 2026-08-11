@@ -1,0 +1,35 @@
+# Continuous Native Generation: the native projects are BUILD OUTPUT, not
+# source. `expo prebuild` regenerates them from app.config.ts, so a committed
+# android/ or ios/ directory is a second source of truth that silently wins
+# over the config — an icon changed in app.config.ts would not appear, and
+# nobody would know why.
+#
+# Ignored before the first local prebuild rather than after, so a stray
+# `expo run:android` cannot put them in a commit by accident.
+/android
+/ios
+
+# Expo's local build and dev-server state, including the generated router
+# types under .expo/types.
+.expo/
+dist/
+web-build/
+
+# Native build artefacts, if a local prebuild happens anyway.
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+
+# EXPO_PUBLIC_* values are compiled into the bundle and are public by
+# definition — but the file may also carry a local API URL nobody else
+# wants, and .env.example is the template.
+.env
+.env.local
+.env.*.local
+
+node_modules/
+npm-debug.*
+*.tsbuildinfo

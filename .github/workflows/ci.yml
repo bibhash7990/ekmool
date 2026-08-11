@@ -47,6 +47,13 @@ jobs:
       # has single-digit KB of headroom). Both are greps; see the script.
       - run: pnpm check:packages
 
+      # Four properties of apps/mobile nothing else enforces, the first of
+      # which is the expensive one: a per-tab nested Stack hangs iOS Release
+      # builds on the splash screen and never reproduces in a debug build,
+      # so review and development both miss it and TestFlight does not.
+      # See scripts/check-mobile.mjs.
+      - run: pnpm check:mobile
+
       # Pure arithmetic — GST, coupons, money, delivery bands — with no
       # server and no database, so it belongs in the fast job rather than
       # behind MySQL coming up.

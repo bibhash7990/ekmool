@@ -2,6 +2,24 @@ packages:
   - "apps/*"
   - "packages/*"
 
+# A native module may exist exactly once in a native build.
+#
+# `expo-doctor` fails on duplicates for a harder reason than the usual
+# bundle-size argument: two copies of a JavaScript library is waste, but two
+# copies of a *native* module is a link error, or worse, a build that
+# succeeds and registers the wrong one.
+#
+# expo-linking asks for `~57.0.9`, which 57.0.10 satisfies — so this is a
+# resolution artefact rather than a real conflict, and pinning is the fix
+# rather than downgrading the app to match a transitive dependency. Checked
+# before pinning: `pnpm --filter mobile exec expo install --check` reports
+# 57.0.10 is the version SDK 57 expects.
+#
+# Remove this the moment expo-linking's range moves; an override that has
+# outlived its cause is how a workspace ends up pinned to something old.
+overrides:
+  expo-constants: 57.0.10
+
 # pnpm 11 refuses to run a dependency's install-time script unless it is
 # named here. Every entry is a decision about code we let run on a developer
 # machine and on a build server, so each one carries its reason. Default to
@@ -21,3 +39,29 @@ allowBuilds:
   # Its postinstall only prints a funding banner. Nothing depends on it
   # having run.
   core-js: false
+
+# pnpm 11 will not install a package published within the last few days
+# unless it is listed here — a supply-chain guard against a compromised
+# release being pulled in before anyone has noticed it.
+#
+# These entries were added by pnpm itself while installing the Expo SDK 57
+# toolchain, which ships its patch releases as a set. They are an explicit
+# record of "this specific version was let through early", which is the
+# point of the mechanism; they are not a blanket exemption and a later SDK
+# bump will need its own.
+minimumReleaseAgeExclude:
+  - '@expo/cli@57.0.14'
+  - '@expo/fingerprint@0.20.7'
+  - '@expo/inline-modules@0.1.5'
+  - '@expo/local-build-cache-provider@57.0.6'
+  - '@expo/metro-config@57.0.8'
+  - '@expo/metro-runtime@57.0.9'
+  - '@expo/prebuild-config@57.0.11'
+  - '@expo/ui@57.0.10'
+  - expo-asset@57.0.10
+  - expo-build-properties@57.0.10
+  - expo-constants@57.0.10
+  - expo-router@57.0.12
+  - expo-server@57.0.2
+  - expo-splash-screen@57.0.6
+  - expo@57.0.12

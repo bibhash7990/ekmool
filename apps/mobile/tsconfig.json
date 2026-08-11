@@ -1,0 +1,27 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    // Not `extends: ../../tsconfig.base.json`, and that is deliberate rather
+    // than an oversight. Expo's base sets the module resolution, the JSX
+    // transform and the lib set that React Native actually needs — `lib:
+    // ["dom"]` from the workspace base would make `document` and `window`
+    // typecheck in a runtime that has neither, which is exactly the error a
+    // typechecker is here to catch. The options that matter to this project
+    // are restated below instead of inherited.
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts"
+  ],
+  "exclude": ["node_modules"]
+}

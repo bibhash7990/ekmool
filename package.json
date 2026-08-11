@@ -11,7 +11,9 @@
     "typecheck": "turbo typecheck",
     "lint": "turbo lint",
     "check:packages": "node scripts/check-shared-packages.mjs",
-    "web": "pnpm --filter web"
+    "check:mobile": "node scripts/check-mobile.mjs",
+    "web": "pnpm --filter web",
+    "mobile": "pnpm --filter mobile"
   },
   "devDependencies": {
     "turbo": "2.10.9",

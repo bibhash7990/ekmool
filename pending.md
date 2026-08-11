@@ -86,6 +86,48 @@ catalogue documents. Those were the two that mattered most.
 
 ---
 
+## 3a. The mobile app — what Phase 3 left for Phase 5
+
+**A 962 KB font nobody chose.** `expo export --platform android` bundles
+`@expo-google-fonts/material-symbols`, pulled in by `expo-symbols`, which is
+a dependency of `expo-router` itself. It arrives regardless of which icons
+the tab bar names, and against a 4.7 MB Hermes bundle it is the single
+largest asset in the app. Phase 5's whole subject is size; this is its first
+target. Measure whether it can be excluded before assuming it can.
+
+**Recorded numbers, so Phase 5 has a baseline rather than an adjective:**
+
+| | |
+|---|---|
+| Hermes bundle (android, release export) | 4.7 MB |
+| Assets | 27, of which one is 962 KB |
+| Modules in the graph | 1815 |
+| Embedded fonts (ours) | 4 files, 154 KB |
+
+These are export figures, **not** an installed app size. The APK/AAB numbers
+in `research/mobile-stack-research.md` §4 are the ones that matter to a
+customer, and they need the §8 build to produce.
+
+**`eslint-config-expo` is not installed.** Mobile lints with `eslint` +
+`typescript-eslint`, both already in the tree for the web, so nothing new
+entered the repository (rule 12). Expo's own config would add React Native
+specific rules — hooks dependency arrays, platform-file consistency — and is
+worth asking for if those turn out to matter.
+
+**Reviews are not read by the app at all.** `reviews-v1.json` ships and
+nothing consumes it. Rendering a rating means first answering what an
+unreviewed product shows, and rule 5 makes that a real question rather than
+a styling one.
+
+**The cart shows a subtotal, not a total.** `FREE_SHIPPING_THRESHOLD_PAISE`
+and `FLAT_SHIPPING_PAISE` live in `apps/web/src/lib/constants.ts`, not in a
+shared package, and coupon value comes from the quote endpoint. Copying
+₹499/₹49 into the app would re-implement arithmetic that Phase 1 exists to
+keep in one place. **If those constants move into `@ekmool/core`, the cart
+screen should grow a real total.**
+
+---
+
 ## 4. Deliberate gaps, written down so they are not rediscovered as bugs
 
 **The 304 needs an edge in front of it.** `/catalog/*.json` publish an ETag,

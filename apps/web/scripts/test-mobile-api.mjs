@@ -63,6 +63,24 @@ function installId(seed) {
   return createHmac("sha256", "mobile-suite").update(seed).digest("hex").slice(0, 32);
 }
 
+/**
+ * The two headers a phone sends, with an install id unique to this run.
+ *
+ * Unique per run because the native checkout ceiling is 3 orders an hour per
+ * install (src/lib/rate-limit.ts) and this suite places two. A fixed id
+ * would pass the first run and refuse the second, which is a suite nobody
+ * can re-run — and "wait an hour" is not a test procedure.
+ *
+ * That does mean the ceiling itself is not asserted here. Asserting it
+ * honestly costs four real orders per run and twenty minutes of refill
+ * before the next one; it is recorded in pending.md instead of being faked.
+ */
+const RUN_INSTALL = installId(`run-${Date.now()}`);
+const NATIVE_HEADERS = {
+  "x-ekmool-client": "mobile/1.0.0 (android; build 1)",
+  "x-ekmool-install": RUN_INSTALL,
+};
+
 function post(path, body, headers = {}) {
   return fetch(`${base}${path}`, {
     method: "POST",
@@ -95,7 +113,21 @@ async function cleanup() {
   await db.execute("DELETE FROM customers WHERE email IN (?, ?)", [BUYER, OTHER]);
 }
 
-/** One COD order, placed the way a customer would. */
+/**
+ * One COD order, placed the way a **phone** would — native headers and all.
+ *
+ * Not the way a browser would, deliberately. `verifyChallenge` runs on
+ * /api/checkout, and a Turnstile-configured server refuses a request with no
+ * token; the browser path is already covered by test:checkout and
+ * test:account. Placing these as a browser meant this suite passed only
+ * against a keyless server and failed with CHALLENGE_FAILED against a fully
+ * configured one — which is the shape of a test that quietly only runs in
+ * one place.
+ *
+ * It also exercises the thing this phase actually added: the native client
+ * skipping a challenge it cannot solve. Against a keyless server that branch
+ * proves nothing, because there is no challenge to skip.
+ */
 async function placeOrder(variantId, email) {
   const response = await post(
     "/api/checkout",
@@ -113,7 +145,10 @@ async function placeOrder(variantId, email) {
       items: [{ variantId, qty: 1 }],
       notes: "",
     },
-    { "idempotency-key": `mob-${email}-${Date.now()}-${Math.random()}` },
+    {
+      "idempotency-key": `mob-${email}-${Date.now()}-${Math.random()}`,
+      ...NATIVE_HEADERS,
+    },
   );
   const data = await response.json();
   if (!response.ok) {
@@ -390,6 +425,51 @@ let token = null;
     theirs.status === 403 || theirs.status === 404,
     `got ${theirs.status}`,
   );
+}
+
+/* ------------------------------------------------------------------ */
+console.log("\n4b. The native client skipped a challenge it could not solve");
+
+{
+  // The two orders above went through as a native client and were not asked
+  // for a Turnstile token. Whether that MEANT anything depends on the server:
+  // with no Turnstile keys there is no challenge to skip, and the branch is
+  // dead code that passes. So ask the same server as a browser and see.
+  const asBrowser = await post(
+    "/api/checkout",
+    {
+      customer: { name: "Mobile Tester", email: BUYER, phone: "9876543210" },
+      address: {
+        line1: "12 Residency Road",
+        line2: "",
+        city: "Bengaluru",
+        state: "Karnataka",
+        pincode: "560025",
+        landmark: "",
+      },
+      paymentMethod: "cod",
+      items: [{ variantId: variant.id, qty: 1 }],
+      notes: "",
+    },
+    { "idempotency-key": `mob-browser-${Date.now()}-${Math.random()}` },
+  );
+
+  if (asBrowser.status === 400) {
+    const body = await asBrowser.json();
+    check(
+      "a browser with no Turnstile token is refused where the phone was not",
+      body.code === "CHALLENGE_FAILED",
+      JSON.stringify(body),
+    );
+  } else {
+    // Not a failure. It is the keyless deployment this project treats as
+    // first-class, and saying so is more useful than a green tick that means
+    // nothing. CI runs keyless, so this is the branch CI takes.
+    console.log(
+      `  NOTE  Turnstile is not configured on this server (browser checkout → ${asBrowser.status}),` +
+        " so the native skip is untested here. Run against a Turnstile-configured server to exercise it.",
+    );
+  }
 }
 
 /* ------------------------------------------------------------------ */

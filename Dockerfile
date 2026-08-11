@@ -40,12 +40,25 @@ FROM base AS deps
 
 # Manifests only, so this layer is invalidated by a dependency change and not
 # by every source edit. In a workspace that means the root's five files plus
-# every member's package.json: pnpm resolves the whole workspace graph in one
-# pass and `--frozen-lockfile` fails outright if a member the lockfile knows
-# about is not on disk. `packages/` is empty in Phase 0 — the first package
-# added there needs a COPY line of its own here.
+# **every member's** package.json: pnpm resolves the whole workspace graph in
+# one pass and `--frozen-lockfile` fails outright if a member the lockfile
+# knows about is not on disk.
+#
+# One line per package rather than `COPY packages/*/package.json`, which does
+# not do what it looks like — Docker flattens the matches into the single
+# destination directory, so three manifests would arrive as one file, the
+# last one winning. There is no glob form that preserves the directory, and a
+# `COPY packages ./packages` would drag every source file into this layer and
+# throw away the caching this stage exists for.
+#
+# ADD A LINE HERE WHEN YOU ADD A PACKAGE. Forgetting is not subtle — the
+# install fails immediately — but it fails inside `docker build`, which is
+# the one place nobody is watching.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc turbo.json ./
 COPY apps/web/package.json ./apps/web/
+COPY packages/core/package.json ./packages/core/
+COPY packages/contracts/package.json ./packages/contracts/
+COPY packages/tokens/package.json ./packages/tokens/
 
 # Dev dependencies are required: next, typescript and tailwind all run during
 # the build, and this image is what performs it. pnpm installs them by
@@ -60,14 +73,23 @@ RUN corepack enable && pnpm install --frozen-lockfile
 ######################  builder  #######################
 FROM base AS builder
 
-# Both node_modules trees, not just the root one. pnpm's isolated linker
+# Every member's node_modules, not just the root one. pnpm's isolated linker
 # (.npmrc: node-linker=isolated) keeps the real packages in the workspace
 # root's node_modules/.pnpm and gives each workspace member a directory of
 # *relative* symlinks into it. Copy only the root and apps/web resolves
-# nothing — not even `next`. The links survive the copy because both trees
-# land at the same paths they occupied in `deps`.
+# nothing — not even `next`. The links survive the copy because every tree
+# lands at the same path it occupied in `deps`.
+#
+# The shared packages come across as one directory rather than one line each.
+# `deps` holds nothing under /app/packages except the manifests it was given
+# and whatever pnpm linked beside them, so this copies exactly the trees and
+# nothing else — and it does not need editing when a fourth package appears.
+# The `COPY . .` below then overlays the source; .dockerignore excludes
+# packages/*/node_modules, so the host's Windows-linked trees cannot clobber
+# what was just copied.
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
+COPY --from=deps /app/packages ./packages
 COPY . .
 
 # Repeated from `deps` on purpose: this stage is FROM base, not FROM deps, so
@@ -141,9 +163,13 @@ CMD ["node", "apps/web/server.js"]
 # file. Adding a stage below this one would silently ship it instead.
 FROM base AS standalone-builder
 
-# Same two-tree copy as `builder`, for the same isolated-linker reason.
+# Same copies as `builder`, for the same isolated-linker reason. Kept in step
+# with that stage by hand: they are two independent paths to the same build,
+# and a package copied in one and not the other fails only on whichever of
+# compose and Render nobody ran last.
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
+COPY --from=deps /app/packages ./packages
 COPY . .
 
 RUN corepack enable

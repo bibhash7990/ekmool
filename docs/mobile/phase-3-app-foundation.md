@@ -56,10 +56,16 @@ pnpm 11 refuses lifecycle scripts unless allowed. Add to
 `pnpm-workspace.yaml` **as they are needed, each with a reason**:
 
 ```yaml
-onlyBuiltDependencies:
-  - esbuild            # expo CLI toolchain
-  - "@sentry/cli"      # Phase 6, if Sentry is taken
+allowBuilds:
+  esbuild: true        # expo CLI toolchain
 ```
+
+The field is `allowBuilds`, a map of name to boolean — **not**
+`onlyBuiltDependencies`, which is the pnpm 10 spelling and is what this
+document said until Phase 3 checked the file. The map form matters: it
+records a deliberate `false` as well as a `true`, which is how
+`core-js: false` came to be written down rather than silently ignored.
+`@sentry/cli` is already allowed there from Phase 0.
 
 Adding entries pre-emptively defeats the point of the mechanism, which is
 that every package permitted to run code at install time was looked at.
@@ -310,9 +316,15 @@ One module, `src/api/client.ts`:
 ### Cart
 
 The RTK slice from `@ekmool/core` (D7), with `expo-sqlite/kv-store` behind
-the `CartStorage` interface Phase 1 defined. Same versioned key
-(`ekmool.cart.v1`), same reducers, same total arithmetic. Two clients, one
-cart implementation, no drift.
+the `CartStorage` interface Phase 1 defined. Same versioned key, same
+reducers, same total arithmetic. Two clients, one cart implementation, no
+drift.
+
+> **The key is `ekmool.cart.v2`** — `CART_STORAGE_KEY` in
+> `packages/core/src/cart/persistence.ts`. This document said `v1` until
+> Phase 3 checked it. `v1` is the **legacy** key, read once and migrated
+> from; on the web, writing to it would silently empty the basket of every
+> customer who has one. Import the constant. Do not retype the string.
 
 ### Session
 

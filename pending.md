@@ -1,0 +1,196 @@
+# Pending
+
+Everything known to be outstanding, as of Phase 2 (`762dcf6`). Nothing here
+is a guess — each item is something that was deliberately deferred, could
+not be run on this machine, or was flagged during the work and left alone on
+purpose.
+
+Ordered by what costs most if it is forgotten.
+
+---
+
+## 1. Rotate the Upstash Redis token — do this first
+
+The full connection URL for the `secure-wildcat-97130` Upstash database,
+password included, was pasted into a chat transcript. Transcripts are stored
+and are not a secret store.
+
+`docs/SECURITY.md`: **a leaked key is rotated at the provider, not renamed.**
+
+- Upstash console → the `secure-wildcat-97130` database → reset the password
+- Update `REDIS_URL` in Vercel (Production, Preview and Development)
+- Redeploy, then confirm `/api/health` reports `"rateLimiter":"redis"`
+
+Nothing breaks while it is unrotated — this is not an incident, it is
+hygiene. But the window stays open until it is done.
+
+**Status:** open.
+
+---
+
+## 2. Confirm the Vercel cron jobs are still listed
+
+The monorepo move set Vercel's Root Directory to `apps/web`, and Vercel
+reads `vercel.json` **from the Root Directory, not the repository root**.
+The file was moved to `apps/web/vercel.json` for exactly this reason, but
+the consequence of getting it wrong is silent: the scheduled jobs simply
+stop, and nothing anywhere reports it.
+
+- Vercel dashboard → the project → Settings → Cron Jobs
+- Expect exactly three, matching `apps/web/vercel.json`:
+  `abandoned-payment-reminder` (02:00 UTC), `low-stock-report` (02:30 UTC),
+  `cancel-stale-orders` (03:00 UTC)
+- If the list is empty, `apps/web/vercel.json` is not being read
+
+Worth a two-minute check because the failure mode is silence, and the first
+symptom would be a customer not receiving a reminder.
+
+**Status:** open, never verified since the move.
+
+### 2a. `final-notice` never runs on Vercel — decide whether that is right
+
+`scripts/cron-runner.mts` schedules **five** jobs; `apps/web/vercel.json`
+declares **three**. Two are missing on Vercel:
+
+| Job | Self-hosted | Vercel | Reading |
+|---|---|---|---|
+| `abandoned-payment-reminder` | hourly | daily 02:00 UTC | a deliberate downgrade, probably for plan limits |
+| `final-notice` | hourly :30 | **absent** | on Vercel, the last-chance email before an order is released **never sends** |
+| `backup-upload` | daily 04:00 IST | absent | correct — there is no local disk to upload from |
+
+The `final-notice` gap is the one that touches a customer. It may well be a
+deliberate trade against Vercel's cron limits, but that is not written down
+anywhere, so it currently reads as an oversight. Either add it to
+`vercel.json` or record why it is not there.
+
+Checked and **not** a problem, so nobody re-opens it: every job route
+exports `GET = POST`, so Vercel Cron's plain GET is handled, and
+`authorizeJob` accepts the `Authorization: Bearer` form Vercel sends as well
+as the `x-cron-secret` header the compose scheduler uses.
+
+**Status:** open, needs a decision rather than a fix.
+
+---
+
+## 3. Verification that has never been run
+
+| What | Why it has not run | What it would prove |
+|---|---|---|
+| `pnpm --filter web chaos` | needs `k6` installed | MySQL pulled out from under **live traffic** — a harder test than `test:db-down`. Now carries the three catalogue documents in its mix, so it would catch a document that is only accidentally static |
+| Lighthouse **performance** score | laptop noise makes it meaningless here — two runs of one identical build gave TBT 820 ms and 310 ms on `/`, with the worst page swapping | Whether the score is genuinely where it should be. **Read it off CI's `budget` job**, which measures on consistent hardware |
+| The native checkout ceiling (3 orders/hour/install, 10/hour/IP) | asserting it costs four real orders and a twenty-minute refill before the suite can run again | That the volume ceiling a native client pays for skipping Turnstile is actually enforced. The code path is exercised by `test:mobile-api`; only the ceiling itself is unasserted |
+
+Both **`test:db-down` and the Docker image have now been run** — see the
+Docker section below, and 27/27 with MySQL stopped including the three
+catalogue documents. Those were the two that mattered most.
+
+---
+
+## 4. Deliberate gaps, written down so they are not rediscovered as bugs
+
+**The 304 needs an edge in front of it.** `/catalog/*.json` publish an ETag,
+but a bare `next start` answers 200 with the full body every time. Under
+`force-static` Next hands the route an empty headers stub, so
+`If-None-Match` cannot be read in the handler — and dropping `force-static`
+to fix that would move the documents out of row one of the rendering table
+and make the app the first thing to fail in a database outage. Vercel's CDN
+and the `--profile edge` nginx both do the conditional. A plain Node origin
+does not. Full account in `apps/web/src/lib/catalog-document.ts`.
+
+**Play Integrity / App Attest are not attempted.** They are the correct
+long-term answer to native abuse, and each is a config plugin, a server
+verification path, a key to manage and a new documented inert state for when
+that key is absent. Its own milestone. Until then the native checkout trade
+is the priced one in `docs/SECURITY.md`: skip the challenge, accept 3
+orders/hour per install and 10/hour per IP.
+
+**Push notifications** are Phase 6 at the earliest, and only for order
+status. Placing an order is not consent to marketing — `docs/SECURITY.md`
+says so and the DPDP Act agrees.
+
+**`minClientBuild` has no client half yet.** The server can say "this build
+is too old"; nothing reads it. That is Phase 3's job, and until it exists
+the field is inert rather than wrong.
+
+---
+
+## 5. Small things
+
+- **The repository-root `.env.local` is the pre-monorepo location.**
+  `apps/web/scripts/load-env.mts` reads it as a fallback and its comment
+  says to drop those two lines once no checkout has one. This checkout still
+  has one, and both files are currently kept in sync by hand — which is
+  exactly the drift the comment is worried about. Delete the root copy once
+  nothing depends on it.
+- `research/audits/lh-product-m2.json` is a stale artifact from an older
+  milestone, sitting beside the current run's four reports. Harmless, but it
+  will confuse whoever reads the directory next.
+- The mobile app does not exist yet, so `docs/mobile/phase-3-app-foundation.md`
+  onwards are plans rather than descriptions. Phases 4–6 are untouched.
+
+---
+
+## The Docker stack — run, and what it found
+
+`docker compose up -d --build` now brings up all seven services: MySQL,
+Redis, a one-shot migrate, a one-shot builder, the app, the cron scheduler
+and the backup scheduler. The site is on **http://localhost:3000**.
+
+It did not work on the first attempt, and the reason is worth keeping:
+
+**The `deps` stage copied no `packages/*/package.json`.** Its own comment
+said "`packages/` is empty in Phase 0 — the first package added there needs
+a COPY line of its own here", and Phase 1 added three without adding the
+line. `pnpm install --frozen-lockfile` resolves the whole workspace graph in
+one pass and fails when a member the lockfile knows about is not on disk.
+Fixed by copying the manifests in `deps` and the whole `/app/packages`
+directory into both build stages — one line rather than one per package, so
+a fourth package needs no edit. The same copy had to be added to
+`standalone-builder`, which is a second independent path to the same build
+and fails only on whichever of compose and Render nobody ran last.
+
+What the run proved that the host build could not:
+
+- The **two-`node_modules`-tree copy** works: pnpm's isolated linker leaves
+  relative symlinks, and they survive the copy because every tree lands at
+  the path it occupied in `deps`.
+- The `apps/web/.next/standalone` COPY path is right — the app serves.
+- `{"ok":true,"db":"up","redis":"up","rateLimiter":"redis"}`: the shared
+  limiter, not the per-process fallback.
+- The **reviews and content ETags are byte-identical to the host build**
+  (`7e0d8329…`, `958a4200…`) across two independent builds on two machines.
+  That is the content hash being genuinely deterministic rather than
+  coincidentally stable.
+- `test:mobile-api` **52/52**, including one assertion the keyless run
+  cannot make: with Turnstile actually configured, a browser with no token
+  is refused where the native client is not. Against a keyless server that
+  branch is dead code that passes.
+
+**The suites assume a keyless server, and that was hidden until now.**
+`test:mobile-api` placed its orders as a browser, so it failed
+`CHALLENGE_FAILED` against a fully-configured local stack while passing in
+CI. It now places them as a phone, which is both what the suite is for and
+what makes it run in either environment. Worth checking whether any other
+suite has the same shape.
+
+---
+
+## Not pending
+
+Recorded here so nobody re-opens them:
+
+- **Phases 0, 1 and 2 are complete and pushed.** Monorepo, shared packages,
+  and the mobile API surface.
+- **`test:db-down` is green** with the catalogue documents included.
+- **The script budget is not a concern.** Phase 2 was measured against a
+  Phase 1 build: 52 chunk files both sides, 2,181,512 → 2,181,704 bytes.
+  192 bytes across the entire client bundle, and no Phase 2 string appears
+  in it at all.
+- **The `unstable_cache` date bug is fixed.** A cache hit returned
+  `Review.createdAt` as a string while the type said `Date`; the dates are
+  now revived outside the cache in `apps/web/src/db/queries/reviews.ts`.
+- **Vercel Cron's GET is handled.** Every `/api/jobs/*` route exports
+  `GET = POST`, and `authorizeJob` accepts `Authorization: Bearer` as well
+  as `x-cron-secret`. Checked against the running stack: both verbs answer
+  200. This looked like a live bug and is not one.
+- **The Docker image builds and runs.** See above.

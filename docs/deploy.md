@@ -83,11 +83,25 @@ source maps), `NEXT_PUBLIC_POSTHOG_KEY`.
    previews working against a separate database).
 4. Deploy.
 
-**Cron** is already declared in `vercel.json` — hourly abandoned-payment
-reminder, daily low-stock report at 02:30 UTC (08:00 IST), daily stale-order
-cancel at 03:00 UTC. Vercel Cron calls them over HTTPS; add `CRON_SECRET` as an
-env var and Vercel will send it. Verify after the first deploy that all three
-appear under Settings → Cron Jobs.
+**Cron** is declared in `apps/web/vercel.json` — **not** at the repository
+root. Vercel reads it from the configured Root Directory, which the monorepo
+move set to `apps/web`, and a copy at the root is simply ignored. The failure
+is silent: the jobs do not appear, nothing errors, and the first symptom is a
+customer not receiving a reminder.
+
+Three jobs, all daily: abandoned-payment reminder at 02:00 UTC, low-stock
+report at 02:30 UTC (08:00 IST), stale-order cancel at 03:00 UTC. Vercel Cron
+calls them over HTTPS; add `CRON_SECRET` as an env var and Vercel will send
+it as `Authorization: Bearer` — which is why every job route also exports
+`GET = POST`, since Vercel Cron issues a plain GET and cannot send a custom
+header. Verify after the first deploy that all three appear under
+Settings → Cron Jobs.
+
+Two differences from the self-hosted scheduler, both worth knowing:
+`abandoned-payment-reminder` runs **hourly** under `scripts/cron-runner.mts`
+and **daily** here, and `final-notice` is scheduled there and absent here, so
+on Vercel it never runs. See `pending.md` — whether that is the right trade
+depends on your plan's cron limits and has not been decided.
 
 **Database.** Vercel does not host MySQL. Use PlanetScale, Aiven, or a managed
 MySQL near your function region — `ap-south-1` (Mumbai) if your buyers are in

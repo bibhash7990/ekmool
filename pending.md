@@ -1,11 +1,39 @@
 # Pending
 
-Everything known to be outstanding, as of Phase 3 (`39f3226`). Nothing here
-is a guess — each item is something that was deliberately deferred, could
-not be run on this machine, or was flagged during the work and left alone on
-purpose.
+Everything known to be outstanding, as of the website-rebuild kickoff
+(after Phase 4, `ca767eb`). Nothing here is a guess — each item is something
+that was deliberately deferred, could not be run on this machine, or was
+flagged during the work and left alone on purpose.
 
 Ordered by what costs most if it is forgotten.
+
+---
+
+## 0. The mobile app is ON HOLD — owner instruction, 2026-08-19
+
+The programme pivoted to a full website rebuild (giva.co-style structure,
+4-category catalog) before any further mobile work. Everything in §3/§3b
+below stands, plus three items recorded at the moment of the hold:
+
+- **The launcher icon bakes the wordmark into the square.**
+  `apps/mobile/assets/icon.png` contains the full "EKMOOL · SINGLE ORIGIN ·
+  INDIA" lockup, so the name renders inside the icon on the home screen —
+  illegible at icon size, and Android prints the app name below the icon
+  anyway. Fix on resume: regenerate `icon.png`, `adaptive-icon.png` and
+  `splash-icon.png` from the roundel mark alone (the circle-and-taproot,
+  no text). The owner has an APK installed from the pre-hold build.
+- **The app UI will be reskinned after the new web design lands.** The
+  Phase 3 app deliberately mirrors the current website; the owner does not
+  like that look. Do not resume Phase 5/6 on the old design.
+- **Catalog document v1 was widened during the rebuild** (fields added:
+  `category`, `subcategory`; types widened: `giTagName` and
+  `packSizeGrams` become nullable). Additive per
+  `packages/contracts/src/documents.ts`, so no v2 — but the app must
+  null-guard `giTagName`/`packSizeGrams` before revival. Typecheck-level
+  guards were added during the rebuild; screens showing GI chips or gram
+  counts need a design pass for null.
+
+**Status:** on hold until the owner says otherwise.
 
 ---
 
